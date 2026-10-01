@@ -1,0 +1,68 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Service\Stamp;
+
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Contracts\HttpClient\HttpClientInterface;
+
+final class GoogleGeocoder
+{
+    private const ENDPOINT = 'https://maps.googleapis.com/maps/api/geocode/json';
+
+    public function __construct(
+        private readonly HttpClientInterface $httpClient,
+        #[Autowire('%env(GOOGLE_MAPS_API_KEY)%')]
+        private readonly string $apiKey,
+    ) {
+    }
+
+    /**
+     * @return array{lat: float, lng: float}|null
+     */
+    public function geocode(string $address): ?array
+    {
+        $address = trim($address);
+        if ('' === $address) {
+            return null;
+        }
+
+        if ('' === $this->apiKey) {
+            throw new \RuntimeException('GOOGLE_MAPS_API_KEY is not configured.');
+        }
+
+        $response = $this->httpClient->request('GET', self::ENDPOINT, [
+            'query' => [
+                'address' => $address,
+                'key' => $this->apiKey,
+            ],
+        ]);
+
+        /** @var array{status?: string, error_message?: string, results?: list<array{geometry?: array{location?: array{lat?: float|int, lng?: float|int}}}>} $payload */
+        $payload = $response->toArray(false);
+        $status = $payload['status'] ?? 'UNKNOWN';
+
+        if ('REQUEST_DENIED' === $status || 'OVER_QUERY_LIMIT' === $status) {
+            throw new \RuntimeException(sprintf(
+                'Google Geocoding failed with status %s: %s',
+                $status,
+                $payload['error_message'] ?? 'no details',
+            ));
+        }
+
+        if ('OK' !== $status) {
+            return null;
+        }
+
+        $location = $payload['results'][0]['geometry']['location'] ?? null;
+        if (!isset($location['lat'], $location['lng'])) {
+            return null;
+        }
+
+        return [
+            'lat' => (float) $location['lat'],
+            'lng' => (float) $location['lng'],
+        ];
+    }
+}
