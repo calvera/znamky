@@ -18,7 +18,7 @@ security:
             provider: app_user_provider
             user_checker: App\Security\UserChecker
             json_login:
-                check_path: api_login
+                check_path: /api/login
                 username_path: email
                 password_path: password
                 success_handler: lexik_jwt_authentication.handler.authentication_success
@@ -29,7 +29,7 @@ security:
             provider: app_user_provider
             user_checker: App\Security\UserChecker
             refresh_jwt:
-                check_path: api_token_refresh
+                check_path: /api/token/refresh
         api:
             pattern: ^/api
             stateless: true

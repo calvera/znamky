@@ -1,0 +1,275 @@
+openapi: 3.2.0
+info:
+  title: 'Znamky API'
+  description: |-
+    JSON API for Znamky.
+
+    Authenticate with `POST /api/login` (verified users only), then send
+    `Authorization: Bearer <token>`. Refresh via `POST /api/token/refresh`.
+
+    Human docs: see `docs/auth.md` in the repository.
+  version: 1.0.0
+servers:
+  -
+    url: /
+    description: ''
+paths:
+  /api/forgot-password:
+    post:
+      operationId: api_forgot_password_post
+      tags:
+        - Authentication
+      responses:
+        '204':
+          description: 'Always returned; does not reveal whether the email exists'
+      summary: 'Request password reset email'
+      description: 'If the email belongs to a user, sends a reset token by email.'
+      requestBody:
+        description: 'Account email'
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+              properties:
+                email:
+                  type: string
+                  format: email
+        required: true
+      security: []
+  /api/logout:
+    post:
+      operationId: api_logout_post
+      tags:
+        - Authentication
+      responses:
+        '204':
+          description: 'Logged out'
+        '401':
+          description: 'Missing or invalid JWT'
+      summary: Logout
+      description: 'Blocklists the current JWT. Optionally revoke a refresh token in the body.'
+      requestBody:
+        description: 'Optional refresh token to revoke'
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh_token:
+                  type: string
+        required: false
+      security:
+        -
+          JWT: []
+  /api/me:
+    get:
+      operationId: api_me_get
+      tags:
+        - Authentication
+      responses:
+        '200':
+          description: 'Current user'
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - id
+                  - email
+                  - roles
+                properties:
+                  id: { type: integer }
+                  email: { type: string, format: email }
+                  roles: { type: array, items: { type: string } }
+        '401':
+          description: 'Missing or invalid JWT'
+      summary: 'Current user'
+      description: 'Returns the authenticated user profile.'
+      security:
+        -
+          JWT: []
+  /api/register:
+    post:
+      operationId: api_register_post
+      tags:
+        - Authentication
+      responses:
+        '201':
+          description: 'User created (email not verified yet)'
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - id
+                  - email
+                properties:
+                  id: { type: integer }
+                  email: { type: string, format: email }
+        '422':
+          description: 'Validation failed (e.g. duplicate email or weak password)'
+      summary: 'Register a new user'
+      description: 'Creates an unverified user and sends a verification token by email.'
+      requestBody:
+        description: 'Registration credentials'
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 8
+        required: true
+      security: []
+  /api/reset-password:
+    post:
+      operationId: api_reset_password_post
+      tags:
+        - Authentication
+      responses:
+        '204':
+          description: 'Password updated'
+        '422':
+          description: 'Invalid token or password'
+      summary: 'Reset password with email token'
+      description: 'Sets a new password using the raw token from the reset email.'
+      requestBody:
+        description: 'Reset token and new password'
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - token
+                - password
+              properties:
+                token:
+                  type: string
+                password:
+                  type: string
+                  minLength: 8
+        required: true
+      security: []
+  /api/verify-email:
+    post:
+      operationId: api_verify_email_post
+      tags:
+        - Authentication
+      responses:
+        '204':
+          description: Success
+        '422':
+          description: 'Invalid or expired token'
+      summary: 'Verify email address'
+      description: 'Confirms the account using the raw token from the verification email.'
+      requestBody:
+        description: 'Verification token from the email'
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - token
+              properties:
+                token:
+                  type: string
+        required: true
+      security: []
+  /api/login:
+    post:
+      operationId: login_check_post
+      tags:
+        - 'Login Check'
+      responses:
+        '200':
+          description: 'User token created'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { readOnly: true, type: string, nullable: false }
+                  refresh_token: { readOnly: true, type: string, nullable: false }
+                required:
+                  - token
+      summary: 'Creates a user token.'
+      description: 'Creates a user token.'
+      requestBody:
+        description: 'The login data'
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  nullable: false
+                password:
+                  type: string
+                  nullable: false
+              required:
+                - email
+                - password
+        required: true
+  /api/token/refresh:
+    post:
+      operationId: gesdinet_jwt_refresh_token_post
+      tags:
+        - 'Login Check'
+      responses:
+        '200':
+          description: 'JWT refreshed'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { readOnly: true, type: string, nullable: false }
+                  refresh_token: { readOnly: true, type: string, nullable: false }
+                required:
+                  - token
+        '401':
+          description: 'The refresh token is missing, unknown or has expired'
+      summary: 'Exchanges a refresh token for a new JWT.'
+      description: 'Returns a new JWT, and a refresh token to use for the next exchange.'
+      requestBody:
+        description: 'The refresh token issued alongside the JWT being replaced'
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh_token:
+                  type: string
+                  nullable: false
+              required:
+                - refresh_token
+        required: true
+components:
+  schemas: {}
+  responses: {}
+  parameters: {}
+  examples: {}
+  requestBodies: {}
+  headers: {}
+  securitySchemes:
+    JWT:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+security: []
+tags:
+  -
+    name: Authentication
+    description: 'Register, verify, login, refresh, logout, and password reset'
+webhooks: {}
+

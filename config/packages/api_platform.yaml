@@ -1,6 +1,13 @@
 api_platform:
-    title: Hello API Platform
+    title: Znamky API
     version: 1.0.0
+    description: |
+        JSON API for Znamky.
+
+        Authenticate with `POST /api/login` (verified users only), then send
+        `Authorization: Bearer <token>`. Refresh via `POST /api/token/refresh`.
+
+        Human docs: see `docs/auth.md` in the repository.
     defaults:
         stateless: true
         cache_headers:

@@ -1,20 +1,35 @@
 # AGENTS.md
 
-This is a Symfony project. Check `composer.json` for the exact Symfony/PHP version
-in use, and read `symfony.lock` to see which recipes ran. Don't assume Doctrine,
-Twig, API Platform, Messenger, or Lock are installed unless one of those says so.
+This is a Symfony API project (Doctrine ORM, API Platform, Security, Mailer, Lexik
+JWT). Check `composer.json` for the exact Symfony/PHP version, and read
+`symfony.lock` to see which recipes ran. Don't assume extras like Messenger or Lock
+are installed unless those files say so.
+
+## Project decisions (settled)
+
+Do not re-ask these. Follow the existing patterns under `src/` and `config/`.
+
+- **Persistence:** Doctrine ORM on PostgreSQL. Schema changes go through migrations.
+- **Interface:** JSON API under `/api` (API Platform + thin controllers). Twig is for email
+  templates only, not server-rendered pages.
+- **Auth:** Lexik JWT (`Authorization: Bearer`) with Gesdinet refresh tokens.
+  - Login: `POST /api/login` (`email` + `password`) via `json_login`.
+  - Refresh: `POST /api/token/refresh`.
+  - User provider: `App\Entity\User` by email.
+  - Unverified users cannot authenticate (`App\Security\UserChecker`).
+- **Email flows (API-token, not frontend links):** Mailer sends a raw token; the client posts
+  it to the API (`POST /api/verify-email`, `POST /api/reset-password`). Register at
+  `POST /api/register`; forgot password at `POST /api/forgot-password`.
+- **Auth code layout:** Controllers in `src/Controller/Auth/`, DTOs in `src/Dto/Auth/`,
+  services in `src/Service/Auth/`. Prefer extending these over inventing parallel stacks.
+- **Docs:** Human docs in `README.md` and `docs/`; keep OpenAPI in sync via
+  `App\OpenApi\AuthOpenApiFactory` and `docs/openapi.yaml` (`api:openapi:export`).
 
 ## Ask before generating
 
-If the task doesn't specify, ask rather than guess:
-
-- Persistence: Doctrine ORM, Doctrine ODM, or none?
-- Interface: server-rendered (Twig), API (Serializer, maybe API Platform), or both?
-- Auth: SecurityBundle, and which authenticator?
-
-If you can't ask (no interactive channel), state the assumption you're making and
-pick the smallest option (e.g. no persistence layer) rather than scaffolding a
-full stack nobody asked for.
+For anything not covered above, ask rather than guess (e.g. new auth mechanisms,
+non-API UIs, alternate persistence). If you can't ask, state the assumption and pick
+the smallest option that fits the settled decisions.
 
 ## Adding features: Flex, not hand-wiring
 
