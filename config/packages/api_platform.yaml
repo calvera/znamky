@@ -7,7 +7,7 @@ api_platform:
         Authenticate with `POST /api/login` (verified users only), then send
         `Authorization: Bearer <token>`. Refresh via `POST /api/token/refresh`.
 
-        Human docs: see `docs/auth.md` in the repository.
+        Human docs: see `docs/auth.md` and `docs/stamps.md` in the repository.
     defaults:
         stateless: true
         cache_headers:

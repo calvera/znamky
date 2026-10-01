@@ -22,6 +22,19 @@ Do not re-ask these. Follow the existing patterns under `src/` and `config/`.
   `POST /api/register`; forgot password at `POST /api/forgot-password`.
 - **Auth code layout:** Controllers in `src/Controller/Auth/`, DTOs in `src/Dto/Auth/`,
   services in `src/Service/Auth/`. Prefer extending these over inventing parallel stacks.
+- **Stamp catalog:** Read-only API Platform resources (`Stamp`, `StampTag`,
+  `StampPlace`) under `/api/stamps`, `/api/stamp_tags`, `/api/stamp_places`.
+  - Identity: stamp `(country, type, number)`; country `CZ`/`SK`, type
+    `regular`/`annual` (`App\Enum\StampCountry`, `App\Enum\StampType`).
+  - Tags and places are shared catalogs (M2M from Stamp). Places dedupe by
+    `catalogKey` (SHA-256 of name + url).
+  - CSV import: `app:stamps:import` from `data/` (`cs-stamps.csv`,
+    `sk-stamps.csv`, `cs-annual.csv`). Prefer `--no-debug` on full imports.
+  - Geocoding: `app:stamps:geocode` via Google Maps (`GOOGLE_MAPS_API_KEY` in
+    `.env.local`). Stamp query = name + region + country; place query = name.
+    Import does not geocode; re-import preserves existing coords unless `--purge`.
+  - Code: entities in `src/Entity/`, services in `src/Service/Stamp/`, commands
+    in `src/Command/`. Human docs: `docs/stamps.md`.
 - **Docs:** Human docs in `README.md` and `docs/`; keep OpenAPI in sync via
   `App\OpenApi\AuthOpenApiFactory` and `docs/openapi.yaml` (`api:openapi:export`).
 

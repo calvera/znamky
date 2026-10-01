@@ -1,6 +1,7 @@
 # Znamky
 
-Symfony 8 JSON API with JWT authentication, email verification, and password reset.
+Symfony 8 JSON API with JWT authentication, a tourist-stamp catalog, email
+verification, and password reset.
 
 ## Requirements
 
@@ -27,7 +28,8 @@ Useful env defaults live in `.env`. Override secrets in `.env.local` (never comm
 | Doc | Description |
 |-----|-------------|
 | [docs/auth.md](docs/auth.md) | Auth flows, endpoints, tokens |
-| [docs/openapi.yaml](docs/openapi.yaml) | OpenAPI 3 spec (auth) |
+| [docs/stamps.md](docs/stamps.md) | Stamp catalog, CSV import, geocoding, read-only API |
+| [docs/openapi.yaml](docs/openapi.yaml) | OpenAPI 3 spec |
 | `/api/docs` | Interactive Swagger UI |
 
 Export the live OpenAPI document anytime:
@@ -47,6 +49,15 @@ php bin/console api:openapi:export --yaml > docs/openapi.yaml
 
 See [docs/auth.md](docs/auth.md) for details.
 
+## Stamp catalog
+
+1. Migrate, then import CSVs: `php bin/console app:stamps:import --no-debug`
+2. Optional geocode (needs `GOOGLE_MAPS_API_KEY` in `.env.local`):
+   `php bin/console app:stamps:geocode`
+3. Read-only API (JWT): `GET /api/stamps`, `/api/stamp_tags`, `/api/stamp_places`
+
+See [docs/stamps.md](docs/stamps.md) for filters, CSV layout, and geocode queries.
+
 ## Tests
 
 ```bash
@@ -58,3 +69,4 @@ php bin/phpunit
 - Symfony 8.1, API Platform 5, Doctrine ORM, PostgreSQL
 - Lexik JWT + Gesdinet refresh tokens
 - Symfony Mailer (verification & password reset)
+- Stamp catalog import + Google Geocoding (`symfony/http-client`)
