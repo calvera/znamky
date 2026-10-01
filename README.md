@@ -21,15 +21,16 @@ php bin/console doctrine:migrations:migrate -n
 symfony serve -d   # or: php -S 127.0.0.1:8000 -t public
 ```
 
-Useful env defaults live in `.env`. Override secrets in `.env.local` (never commit them).
+Useful env defaults live in `.env`. Override secrets in `.env.local` (never commit
+them) — including `APP_SECRET`, `JWT_PASSPHRASE`, and `GOOGLE_MAPS_API_KEY`.
 
 ## Documentation
 
 | Doc | Description |
 |-----|-------------|
-| [docs/auth.md](docs/auth.md) | Auth flows, endpoints, tokens |
+| [docs/auth.md](docs/auth.md) | Auth flows, endpoints, tokens, validation errors |
 | [docs/stamps.md](docs/stamps.md) | Stamp catalog, CSV import, geocoding, read-only API |
-| [docs/openapi.yaml](docs/openapi.yaml) | OpenAPI 3 spec |
+| [docs/openapi.yaml](docs/openapi.yaml) | OpenAPI 3 spec (auth + stamp resources) |
 | `/api/docs` | Interactive Swagger UI |
 
 Export the live OpenAPI document anytime:
@@ -45,9 +46,11 @@ php bin/console api:openapi:export --yaml > docs/openapi.yaml
 3. `POST /api/login` — returns JWT + refresh token (verified users only)
 4. Authenticated calls use `Authorization: Bearer <token>`
 5. `POST /api/token/refresh` — exchanges a refresh token for a new pair
-6. Password reset: `POST /api/forgot-password` then `POST /api/reset-password`
+6. `POST /api/logout` — blocklists JWT; revokes refresh token(s)
+7. Password reset: `POST /api/forgot-password` then `POST /api/reset-password`
 
-See [docs/auth.md](docs/auth.md) for details.
+DTO validation failures return **422** with `{ title, detail, violations[] }`.
+See [docs/auth.md](docs/auth.md).
 
 ## Stamp catalog
 
@@ -56,7 +59,9 @@ See [docs/auth.md](docs/auth.md) for details.
    `php bin/console app:stamps:geocode`
 3. Read-only API (JWT): `GET /api/stamps`, `/api/stamp_tags`, `/api/stamp_places`
 
-See [docs/stamps.md](docs/stamps.md) for filters, CSV layout, and geocode queries.
+Import and geocode take a shared lock (`stamps-catalog`) so they cannot run
+concurrently. See [docs/stamps.md](docs/stamps.md) for filters, CSV layout, and
+geocode queries.
 
 ## Tests
 
@@ -70,3 +75,4 @@ php bin/phpunit
 - Lexik JWT + Gesdinet refresh tokens
 - Symfony Mailer (verification & password reset)
 - Stamp catalog import + Google Geocoding (`symfony/http-client`)
+- `symfony/lock` for stamp import/geocode mutual exclusion

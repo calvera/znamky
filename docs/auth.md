@@ -15,7 +15,7 @@ Interactive docs: [`/api/docs`](/api/docs). Machine-readable: [`openapi.yaml`](o
 | `POST` | `/api/token/refresh` | — | Rotate JWT using refresh token |
 | `POST` | `/api/forgot-password` | — | Send password-reset email (always 204) |
 | `POST` | `/api/reset-password` | — | Set new password with reset token |
-| `POST` | `/api/logout` | JWT | Invalidate JWT (and optional refresh token) |
+| `POST` | `/api/logout` | JWT | Invalidate JWT (and refresh token(s)) |
 | `GET` | `/api/me` | JWT | Current user profile |
 
 All other `/api/*` routes require a valid JWT (`IS_AUTHENTICATED_FULLY`).
@@ -92,7 +92,7 @@ Content-Type: application/json
 {"token":"<token-from-email>","password":"newpassword123"}
 ```
 
-**204** on success.
+**204** on success. All refresh tokens for the user are revoked.
 
 ## Logout
 
@@ -104,16 +104,44 @@ Content-Type: application/json
 {"refresh_token":"<refresh>"}
 ```
 
-**204**. The access token is blocklisted. If `refresh_token` is provided, it is
-revoked as well.
+**204**. The access token is blocklisted.
+
+- If `refresh_token` is provided, that refresh token is revoked.
+- If it is omitted (or `null`), **all** refresh tokens for the user are revoked.
 
 ## Validation & errors
 
-- Invalid payloads typically return **422** (validation).
-- Bad credentials / unverified account / expired tokens: **401**.
-- Duplicate registration email: **422**.
+Request DTOs (`register`, `verify-email`, `forgot-password`, `reset-password`,
+`logout`) are bound with `#[MapRequestPayload]`. Failed validation returns
+**422** with a structured body:
+
+```json
+{
+  "title": "Validation Failed",
+  "detail": "The given data failed validation.",
+  "violations": [
+    {"propertyPath": "email", "message": "This value is not a valid email address."},
+    {"propertyPath": "password", "message": "This value is too short. It should have 8 characters or more."}
+  ]
+}
+```
+
+Other cases:
+
+- Bad credentials / unverified account / expired JWT or refresh: **401**
+- Duplicate registration email: **422** (same `ValidationFailed` shape when
+  thrown from the validator)
+- Invalid/expired verify or reset token: **422**
 
 Password minimum length is **8** characters.
+
+## Secrets
+
+Put real secrets in `.env.local` (git-ignored), not in committed `.env`:
+
+- `APP_SECRET`
+- `JWT_PASSPHRASE` (matches the passphrase used when generating `config/jwt/*.pem`)
+- `MAILER_DSN` / `MAILER_FROM` as needed
 
 ## Code map
 
@@ -124,5 +152,7 @@ Password minimum length is **8** characters.
 | Domain services | `src/Service/Auth/` |
 | User entity | `src/Entity/User.php` |
 | Block unverified login | `src/Security/UserChecker.php` |
+| Validation error JSON | `src/EventSubscriber/ValidationFailedExceptionSubscriber.php` |
+| OpenAPI auth paths | `src/OpenApi/AuthOpenApiFactory.php` |
 | Email templates | `templates/email/` |
 | Functional tests | `tests/Api/AuthTest.php` |

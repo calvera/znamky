@@ -40,10 +40,33 @@ final class AuthOpenApiFactory implements OpenApiFactoryInterface
         $paths->addPath('/api/logout', new PathItem(post: $this->logoutOperation()));
         $paths->addPath('/api/me', new PathItem(get: $this->meOperation()));
 
+        $schemas = $openApi->getComponents()->getSchemas() ?? new \ArrayObject();
+        $schemas['ValidationFailed'] = new \ArrayObject([
+            'type' => 'object',
+            'required' => ['title', 'detail', 'violations'],
+            'properties' => [
+                'title' => ['type' => 'string', 'example' => 'Validation Failed'],
+                'detail' => ['type' => 'string', 'example' => 'The given data failed validation.'],
+                'violations' => [
+                    'type' => 'array',
+                    'items' => [
+                        'type' => 'object',
+                        'required' => ['propertyPath', 'message'],
+                        'properties' => [
+                            'propertyPath' => ['type' => 'string', 'example' => 'email'],
+                            'message' => ['type' => 'string', 'example' => 'This value is not a valid email address.'],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
         $tags = $openApi->getTags();
         $tags[] = new Tag(name: 'Authentication', description: 'Register, verify, login, refresh, logout, and password reset');
 
-        return $openApi->withTags($tags);
+        return $openApi
+            ->withComponents($openApi->getComponents()->withSchemas($schemas))
+            ->withTags($tags);
     }
 
     private function registerOperation(): Operation
@@ -65,8 +88,8 @@ final class AuthOpenApiFactory implements OpenApiFactoryInterface
                         ])),
                     ]),
                 ),
-                (string) HttpResponse::HTTP_UNPROCESSABLE_ENTITY => new Response(
-                    description: 'Validation failed (e.g. duplicate email or weak password)',
+                (string) HttpResponse::HTTP_UNPROCESSABLE_ENTITY => $this->validationFailedResponse(
+                    'Validation failed (invalid email/password or duplicate email)',
                 ),
             ],
             summary: 'Register a new user',
@@ -96,7 +119,9 @@ final class AuthOpenApiFactory implements OpenApiFactoryInterface
             tags: ['Authentication'],
             responses: [
                 (string) HttpResponse::HTTP_NO_CONTENT => new Response(description: 'Success'),
-                (string) HttpResponse::HTTP_UNPROCESSABLE_ENTITY => new Response(description: 'Invalid or expired token'),
+                (string) HttpResponse::HTTP_UNPROCESSABLE_ENTITY => $this->validationFailedResponse(
+                    'Invalid payload, or invalid/expired token',
+                ),
             ],
             summary: $summary,
             description: $description,
@@ -126,6 +151,9 @@ final class AuthOpenApiFactory implements OpenApiFactoryInterface
                 (string) HttpResponse::HTTP_NO_CONTENT => new Response(
                     description: 'Always returned; does not reveal whether the email exists',
                 ),
+                (string) HttpResponse::HTTP_UNPROCESSABLE_ENTITY => $this->validationFailedResponse(
+                    'Validation failed (invalid email)',
+                ),
             ],
             summary: 'Request password reset email',
             description: 'If the email belongs to a user, sends a reset token by email.',
@@ -153,10 +181,12 @@ final class AuthOpenApiFactory implements OpenApiFactoryInterface
             tags: ['Authentication'],
             responses: [
                 (string) HttpResponse::HTTP_NO_CONTENT => new Response(description: 'Password updated'),
-                (string) HttpResponse::HTTP_UNPROCESSABLE_ENTITY => new Response(description: 'Invalid token or password'),
+                (string) HttpResponse::HTTP_UNPROCESSABLE_ENTITY => $this->validationFailedResponse(
+                    'Invalid payload, or invalid/expired token',
+                ),
             ],
             summary: 'Reset password with email token',
-            description: 'Sets a new password using the raw token from the reset email.',
+            description: 'Sets a new password using the raw token from the reset email. Revokes all refresh tokens for the user.',
             requestBody: new RequestBody(
                 description: 'Reset token and new password',
                 content: new \ArrayObject([
@@ -185,14 +215,14 @@ final class AuthOpenApiFactory implements OpenApiFactoryInterface
                 (string) HttpResponse::HTTP_UNAUTHORIZED => new Response(description: 'Missing or invalid JWT'),
             ],
             summary: 'Logout',
-            description: 'Blocklists the current JWT. Optionally revoke a refresh token in the body.',
+            description: 'Blocklists the current JWT. If `refresh_token` is sent, that refresh token is revoked; otherwise all refresh tokens for the user are revoked.',
             requestBody: new RequestBody(
-                description: 'Optional refresh token to revoke',
+                description: 'Optional refresh token to revoke (omit to revoke all for the user)',
                 content: new \ArrayObject([
                     'application/json' => new MediaType(schema: new \ArrayObject([
                         'type' => 'object',
                         'properties' => [
-                            'refresh_token' => ['type' => 'string'],
+                            'refresh_token' => ['type' => 'string', 'nullable' => true],
                         ],
                     ])),
                 ]),
@@ -230,6 +260,18 @@ final class AuthOpenApiFactory implements OpenApiFactoryInterface
             summary: 'Current user',
             description: 'Returns the authenticated user profile.',
             security: [['JWT' => []]],
+        );
+    }
+
+    private function validationFailedResponse(string $description): Response
+    {
+        return new Response(
+            description: $description,
+            content: new \ArrayObject([
+                'application/json' => new MediaType(schema: new \ArrayObject([
+                    '$ref' => '#/components/schemas/ValidationFailed',
+                ])),
+            ]),
         );
     }
 }
