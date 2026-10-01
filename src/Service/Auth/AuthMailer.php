@@ -10,12 +10,12 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Mime\Address;
 
-final readonly class AuthMailer
+final class AuthMailer
 {
     public function __construct(
-        private MailerInterface $mailer,
+        private readonly MailerInterface $mailer,
         #[Autowire('%env(MAILER_FROM)%')]
-        private string $from,
+        private readonly string $from,
     ) {
     }
 

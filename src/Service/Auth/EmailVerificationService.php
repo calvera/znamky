@@ -8,11 +8,11 @@ use App\Repository\UserRepository;
 use App\Security\TokenHasher;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
-final readonly class EmailVerificationService
+final class EmailVerificationService
 {
     public function __construct(
-        private UserRepository $userRepository,
-        private TokenHasher $tokenHasher,
+        private readonly UserRepository $userRepository,
+        private readonly TokenHasher $tokenHasher,
     ) {
     }
 

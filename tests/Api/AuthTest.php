@@ -67,6 +67,23 @@ final class AuthTest extends WebTestCase
         self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
     }
 
+    public function testRegisterInvalidPayloadReturnsStructured422(): void
+    {
+        $this->jsonRequest('POST', '/api/register', [
+            'email' => 'not-an-email',
+            'password' => 'short',
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
+
+        $body = json_decode($this->client->getResponse()->getContent() ?: '[]', true, 512, \JSON_THROW_ON_ERROR);
+        self::assertSame('Validation Failed', $body['title'] ?? null);
+        self::assertSame('The given data failed validation.', $body['detail'] ?? null);
+        self::assertIsArray($body['violations'] ?? null);
+        self::assertNotEmpty($body['violations']);
+        self::assertArrayHasKey('propertyPath', $body['violations'][0]);
+        self::assertArrayHasKey('message', $body['violations'][0]);
+    }
+
     public function testRefreshRotatesToken(): void
     {
         $email = 'refresh@example.com';

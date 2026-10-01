@@ -11,6 +11,8 @@ use Doctrine\ORM\EntityManagerInterface;
 
 final class StampGeocodeService
 {
+    private const BATCH_SIZE = 50;
+
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
         private readonly StampRepository $stampRepository,
@@ -25,8 +27,9 @@ final class StampGeocodeService
     public function geocodeStamps(bool $force = false, ?callable $onProgress = null): array
     {
         $stats = ['geocoded' => 0, 'skipped' => 0, 'failed' => 0];
+        $processed = 0;
 
-        foreach ($this->stampRepository->findNeedingGeocode($force) as $stamp) {
+        foreach ($this->stampRepository->iterateNeedingGeocode($force) as $stamp) {
             $query = $this->buildStampQuery($stamp);
             if ('' === $query) {
                 ++$stats['skipped'];
@@ -37,7 +40,6 @@ final class StampGeocodeService
             if (null === $coords) {
                 ++$stats['failed'];
                 $onProgress && $onProgress('stamp', $stamp->getId(), false);
-
                 continue;
             }
 
@@ -46,8 +48,16 @@ final class StampGeocodeService
                 ->setLongitude($coords['lng']);
             ++$stats['geocoded'];
             $onProgress && $onProgress('stamp', $stamp->getId(), true);
-            $this->entityManager->flush();
+
+            ++$processed;
+            if (0 === $processed % self::BATCH_SIZE) {
+                $this->entityManager->flush();
+                $this->entityManager->clear();
+            }
         }
+
+        $this->entityManager->flush();
+        $this->entityManager->clear();
 
         return $stats;
     }
@@ -58,8 +68,9 @@ final class StampGeocodeService
     public function geocodePlaces(bool $force = false, ?callable $onProgress = null): array
     {
         $stats = ['geocoded' => 0, 'skipped' => 0, 'failed' => 0];
+        $processed = 0;
 
-        foreach ($this->stampPlaceRepository->findNeedingGeocode($force) as $place) {
+        foreach ($this->stampPlaceRepository->iterateNeedingGeocode($force) as $place) {
             $query = trim($place->getName());
             if ('' === $query) {
                 ++$stats['skipped'];
@@ -70,7 +81,6 @@ final class StampGeocodeService
             if (null === $coords) {
                 ++$stats['failed'];
                 $onProgress && $onProgress('place', $place->getId(), false);
-
                 continue;
             }
 
@@ -79,8 +89,16 @@ final class StampGeocodeService
                 ->setLongitude($coords['lng']);
             ++$stats['geocoded'];
             $onProgress && $onProgress('place', $place->getId(), true);
-            $this->entityManager->flush();
+
+            ++$processed;
+            if (0 === $processed % self::BATCH_SIZE) {
+                $this->entityManager->flush();
+                $this->entityManager->clear();
+            }
         }
+
+        $this->entityManager->flush();
+        $this->entityManager->clear();
 
         return $stats;
     }

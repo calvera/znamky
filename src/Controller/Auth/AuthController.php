@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller\Auth;
 
 use App\Dto\Auth\ForgotPasswordRequest;
+use App\Dto\Auth\LogoutRequest;
 use App\Dto\Auth\RegisterRequest;
 use App\Dto\Auth\ResetPasswordRequest;
 use App\Dto\Auth\TokenRequest;
@@ -20,6 +21,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\CurrentUser;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 #[Route('/api')]
 final class AuthController extends AbstractController
@@ -83,20 +85,22 @@ final class AuthController extends AbstractController
         return new Response(status: Response::HTTP_NO_CONTENT);
     }
 
+    #[IsGranted('IS_AUTHENTICATED_FULLY')]
     #[Route('/logout', name: 'api_logout', methods: ['POST'])]
     public function logout(
         #[CurrentUser]
         User $user,
+        #[MapRequestPayload]
+        LogoutRequest $logoutRequest,
         Request $request,
         LogoutService $logoutService,
     ): Response {
-        $payload = json_decode($request->getContent() ?: '{}', true);
-        $refreshToken = \is_array($payload) ? ($payload['refresh_token'] ?? null) : null;
-        $logoutService->logout($user, $request, \is_string($refreshToken) ? $refreshToken : null);
+        $logoutService->logout($user, $request, $logoutRequest->refresh_token);
 
         return new Response(status: Response::HTTP_NO_CONTENT);
     }
 
+    #[IsGranted('IS_AUTHENTICATED_FULLY')]
     #[Route('/me', name: 'api_me', methods: ['GET'])]
     public function me(#[CurrentUser] User $user): JsonResponse
     {

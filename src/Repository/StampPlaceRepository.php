@@ -26,17 +26,17 @@ class StampPlaceRepository extends ServiceEntityRepository
     }
 
     /**
-     * @return list<StampPlace>
+     * @return \Traversable<int, StampPlace>
      */
-    public function findNeedingGeocode(bool $force = false): array
+    public function iterateNeedingGeocode(bool $force = false): \Traversable
     {
         $qb = $this->createQueryBuilder('p')->orderBy('p.id', 'ASC');
         if (!$force) {
             $qb->andWhere('p.latitude IS NULL OR p.longitude IS NULL');
         }
 
-        /** @var list<StampPlace> $result */
-        $result = $qb->getQuery()->getResult();
+        /** @var \Traversable<int, StampPlace> $result */
+        $result = $qb->getQuery()->toIterable();
 
         return $result;
     }

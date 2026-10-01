@@ -13,7 +13,7 @@ use App\Repository\StampPlaceRepository;
 use App\Repository\StampRepository;
 use App\Repository\StampTagRepository;
 use Doctrine\ORM\EntityManagerInterface;
-use Symfony\Component\String\Slugger\AsciiSlugger;
+use Symfony\Component\String\Slugger\SluggerInterface;
 
 final class StampImportService
 {
@@ -31,6 +31,7 @@ final class StampImportService
         private readonly StampTagRepository $stampTagRepository,
         private readonly StampPlaceRepository $stampPlaceRepository,
         private readonly PlaceLineParser $placeLineParser,
+        private readonly SluggerInterface $slugger,
     ) {
     }
 
@@ -110,14 +111,12 @@ final class StampImportService
             $indexes = $this->mapIndexes($header);
 
             $count = 0;
-            $slugger = new AsciiSlugger();
-
             while (false !== ($row = fgetcsv($handle, length: 0, separator: ';', enclosure: '"', escape: '\\'))) {
                 if ($this->isEmptyRow($row)) {
                     continue;
                 }
 
-                $this->importRow($row, $indexes, $defaultCountry, $defaultType, $slugger);
+                $this->importRow($row, $indexes, $defaultCountry, $defaultType);
                 ++$count;
 
                 if (0 === $count % self::BATCH_SIZE) {
@@ -143,7 +142,6 @@ final class StampImportService
         array $indexes,
         StampCountry $defaultCountry,
         StampType $defaultType,
-        AsciiSlugger $slugger,
     ): void {
         $number = (int) $this->cell($row, $indexes, 'Číslo');
         $name = $this->cell($row, $indexes, 'Název');
@@ -179,7 +177,7 @@ final class StampImportService
 
         $stamp->clearTags();
         foreach ($this->placeLineParser->parseTags($kategorie) as $tagName) {
-            $stamp->addTag($this->getOrCreateTag($tagName, $slugger));
+            $stamp->addTag($this->getOrCreateTag($tagName));
         }
 
         $stamp->clearPlaces();
@@ -188,7 +186,7 @@ final class StampImportService
         }
     }
 
-    private function getOrCreateTag(string $name, AsciiSlugger $slugger): StampTag
+    private function getOrCreateTag(string $name): StampTag
     {
         if (isset($this->tagCache[$name])) {
             return $this->tagCache[$name];
@@ -198,7 +196,7 @@ final class StampImportService
         if (null === $tag) {
             $tag = (new StampTag())
                 ->setName($name)
-                ->setSlug($slugger->slug($name)->lower()->toString());
+                ->setSlug($this->slugger->slug($name)->lower()->toString());
             $this->entityManager->persist($tag);
         }
 

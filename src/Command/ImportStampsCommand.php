@@ -12,6 +12,7 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Component\Lock\LockFactory;
 
 #[AsCommand(
     name: 'app:stamps:import',
@@ -19,8 +20,11 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 )]
 final class ImportStampsCommand extends Command
 {
+    private const LOCK_RESOURCE = 'stamps-catalog';
+
     public function __construct(
         private readonly StampImportService $stampImportService,
+        private readonly LockFactory $lockFactory,
         #[Autowire('%kernel.project_dir%')]
         private readonly string $projectDir,
     ) {
@@ -41,26 +45,37 @@ final class ImportStampsCommand extends Command
         }
 
         $io = new SymfonyStyle($input, $output);
-        $path = (string) $input->getOption('path');
-        if (!str_starts_with($path, '/')) {
-            $path = $this->projectDir.\DIRECTORY_SEPARATOR.$path;
+        $lock = $this->lockFactory->createLock(self::LOCK_RESOURCE);
+        if (!$lock->acquire()) {
+            $io->error('Another stamp catalog operation is already running.');
+
+            return Command::FAILURE;
         }
 
-        $purge = (bool) $input->getOption('purge');
-        if ($purge) {
-            $io->warning('Purging existing stamp catalog before import.');
+        try {
+            $path = (string) $input->getOption('path');
+            if (!str_starts_with($path, '/')) {
+                $path = $this->projectDir.\DIRECTORY_SEPARATOR.$path;
+            }
+
+            $purge = (bool) $input->getOption('purge');
+            if ($purge) {
+                $io->warning('Purging existing stamp catalog before import.');
+            }
+
+            $result = $this->stampImportService->import($path, $purge);
+
+            $io->success(sprintf(
+                'Imported %d stamps from %d file(s) (%d tags, %d places).',
+                $result['stamps'],
+                $result['files'],
+                $result['tags'],
+                $result['places'],
+            ));
+
+            return Command::SUCCESS;
+        } finally {
+            $lock->release();
         }
-
-        $result = $this->stampImportService->import($path, $purge);
-
-        $io->success(sprintf(
-            'Imported %d stamps from %d file(s) (%d tags, %d places).',
-            $result['stamps'],
-            $result['files'],
-            $result['tags'],
-            $result['places'],
-        ));
-
-        return Command::SUCCESS;
     }
 }

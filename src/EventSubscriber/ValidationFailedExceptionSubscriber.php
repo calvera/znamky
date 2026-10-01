@@ -4,29 +4,25 @@ declare(strict_types=1);
 
 namespace App\EventSubscriber;
 
-use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\Validator\Exception\ValidationFailedException;
 
-final class ValidationFailedExceptionSubscriber implements EventSubscriberInterface
+final class ValidationFailedExceptionSubscriber
 {
-    public static function getSubscribedEvents(): array
-    {
-        return [KernelEvents::EXCEPTION => 'onException'];
-    }
-
+    #[AsEventListener(event: KernelEvents::EXCEPTION)]
     public function onException(ExceptionEvent $event): void
     {
-        $throwable = $event->getThrowable();
-        if (!$throwable instanceof ValidationFailedException) {
+        $validationFailed = $this->findValidationFailedException($event->getThrowable());
+        if (null === $validationFailed) {
             return;
         }
 
         $errors = [];
-        foreach ($throwable->getViolations() as $violation) {
+        foreach ($validationFailed->getViolations() as $violation) {
             $errors[] = [
                 'propertyPath' => $violation->getPropertyPath(),
                 'message' => $violation->getMessage(),
@@ -38,5 +34,18 @@ final class ValidationFailedExceptionSubscriber implements EventSubscriberInterf
             'detail' => 'The given data failed validation.',
             'violations' => $errors,
         ], Response::HTTP_UNPROCESSABLE_ENTITY));
+    }
+
+    private function findValidationFailedException(\Throwable $throwable): ?ValidationFailedException
+    {
+        $current = $throwable;
+        while (null !== $current) {
+            if ($current instanceof ValidationFailedException) {
+                return $current;
+            }
+            $current = $current->getPrevious();
+        }
+
+        return null;
     }
 }

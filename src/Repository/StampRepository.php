@@ -30,17 +30,17 @@ class StampRepository extends ServiceEntityRepository
     }
 
     /**
-     * @return list<Stamp>
+     * @return \Traversable<int, Stamp>
      */
-    public function findNeedingGeocode(bool $force = false): array
+    public function iterateNeedingGeocode(bool $force = false): \Traversable
     {
         $qb = $this->createQueryBuilder('s')->orderBy('s.id', 'ASC');
         if (!$force) {
             $qb->andWhere('s.latitude IS NULL OR s.longitude IS NULL');
         }
 
-        /** @var list<Stamp> $result */
-        $result = $qb->getQuery()->getResult();
+        /** @var \Traversable<int, Stamp> $result */
+        $result = $qb->getQuery()->toIterable();
 
         return $result;
     }

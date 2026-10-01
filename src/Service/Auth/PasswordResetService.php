@@ -7,19 +7,18 @@ namespace App\Service\Auth;
 use App\Entity\User;
 use App\Repository\UserRepository;
 use App\Security\TokenHasher;
-use Gesdinet\JWTRefreshTokenBundle\Model\RefreshTokenManagerInterface;
 use Gesdinet\JWTRefreshTokenBundle\Model\RevokeRefreshTokenManagerInterface;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 
-final readonly class PasswordResetService
+final class PasswordResetService
 {
     public function __construct(
-        private UserRepository $userRepository,
-        private TokenHasher $tokenHasher,
-        private AuthMailer $authMailer,
-        private UserPasswordHasherInterface $passwordHasher,
-        private RefreshTokenManagerInterface $refreshTokenManager,
+        private readonly UserRepository $userRepository,
+        private readonly TokenHasher $tokenHasher,
+        private readonly AuthMailer $authMailer,
+        private readonly UserPasswordHasherInterface $passwordHasher,
+        private readonly RevokeRefreshTokenManagerInterface $refreshTokenManager,
     ) {
     }
 
@@ -58,13 +57,6 @@ final readonly class PasswordResetService
         $user->setPasswordResetTokenExpiresAt(null);
 
         $this->userRepository->save($user);
-        $this->revokeRefreshTokens($user);
-    }
-
-    private function revokeRefreshTokens(User $user): void
-    {
-        if ($this->refreshTokenManager instanceof RevokeRefreshTokenManagerInterface) {
-            $this->refreshTokenManager->revokeAllForUser($user);
-        }
+        $this->refreshTokenManager->revokeAllForUser($user);
     }
 }

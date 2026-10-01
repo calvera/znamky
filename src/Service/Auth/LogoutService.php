@@ -12,13 +12,14 @@ use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
 use Lexik\Bundle\JWTAuthenticationBundle\TokenExtractor\TokenExtractorInterface;
 use Symfony\Component\HttpFoundation\Request;
 
-final readonly class LogoutService
+final class LogoutService
 {
     public function __construct(
-        private RefreshTokenManagerInterface $refreshTokenManager,
-        private BlockedTokenManagerInterface $blockedTokenManager,
-        private JWTTokenManagerInterface $jwtManager,
-        private TokenExtractorInterface $tokenExtractor,
+        private readonly RefreshTokenManagerInterface $refreshTokenManager,
+        private readonly RevokeRefreshTokenManagerInterface $revokeRefreshTokenManager,
+        private readonly BlockedTokenManagerInterface $blockedTokenManager,
+        private readonly JWTTokenManagerInterface $jwtManager,
+        private readonly TokenExtractorInterface $tokenExtractor,
     ) {
     }
 
@@ -35,9 +36,7 @@ final readonly class LogoutService
             return;
         }
 
-        if ($this->refreshTokenManager instanceof RevokeRefreshTokenManagerInterface) {
-            $this->refreshTokenManager->revokeAllForUser($user);
-        }
+        $this->revokeRefreshTokenManager->revokeAllForUser($user);
     }
 
     private function blockAccessToken(Request $request): void

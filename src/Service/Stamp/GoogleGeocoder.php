@@ -39,8 +39,16 @@ final class GoogleGeocoder
             ],
         ]);
 
+        $statusCode = $response->getStatusCode();
+        if ($statusCode < 200 || $statusCode >= 300) {
+            throw new \RuntimeException(sprintf(
+                'Google Geocoding HTTP request failed with status %d.',
+                $statusCode,
+            ));
+        }
+
         /** @var array{status?: string, error_message?: string, results?: list<array{geometry?: array{location?: array{lat?: float|int, lng?: float|int}}}>} $payload */
-        $payload = $response->toArray(false);
+        $payload = $response->toArray();
         $status = $payload['status'] ?? 'UNKNOWN';
 
         if ('REQUEST_DENIED' === $status || 'OVER_QUERY_LIMIT' === $status) {

@@ -16,10 +16,10 @@ use Symfony\Component\DependencyInjection\Attribute\AsDecorator;
 use Symfony\Component\HttpFoundation\Response as HttpResponse;
 
 #[AsDecorator(decorates: 'api_platform.openapi.factory', priority: 10)]
-final readonly class AuthOpenApiFactory implements OpenApiFactoryInterface
+final class AuthOpenApiFactory implements OpenApiFactoryInterface
 {
     public function __construct(
-        private OpenApiFactoryInterface $decorated,
+        private readonly OpenApiFactoryInterface $decorated,
     ) {
     }
 

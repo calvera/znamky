@@ -12,14 +12,14 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Validator\Exception\ValidationFailedException;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
-final readonly class UserRegistrationService
+final class UserRegistrationService
 {
     public function __construct(
-        private UserRepository $userRepository,
-        private UserPasswordHasherInterface $passwordHasher,
-        private TokenHasher $tokenHasher,
-        private AuthMailer $authMailer,
-        private ValidatorInterface $validator,
+        private readonly UserRepository $userRepository,
+        private readonly UserPasswordHasherInterface $passwordHasher,
+        private readonly TokenHasher $tokenHasher,
+        private readonly AuthMailer $authMailer,
+        private readonly ValidatorInterface $validator,
     ) {
     }
 
