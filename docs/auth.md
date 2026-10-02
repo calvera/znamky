@@ -10,7 +10,7 @@ Interactive docs: [`/api/docs`](/api/docs). Machine-readable: [`openapi.yaml`](o
 | Method | Path | Auth | Purpose |
 |--------|------|------|---------|
 | `POST` | `/api/register` | — | Create account; send verification email |
-| `POST` | `/api/verify-email` | — | Confirm email with token from mail |
+| `POST` | `/api/verify-email` | — | Confirm email and set the account password |
 | `POST` | `/api/login` | — | Issue JWT + refresh token |
 | `POST` | `/api/token/refresh` | — | Rotate JWT using refresh token |
 | `POST` | `/api/forgot-password` | — | Send password-reset email (always 204) |
@@ -32,13 +32,15 @@ Content-Type: application/json
 **201** `{ "id": 1, "email": "user@example.com" }` — user is **not** verified yet.
 Login before verification returns **401**.
 
-The verification email body includes a raw token. Confirm it:
+The verification email body includes a raw token. Confirm it and set the password
+that will be used to log in. That password replaces the one sent at registration,
+so only the mailbox owner chooses the credential that can authenticate.
 
 ```http
 POST /api/verify-email
 Content-Type: application/json
 
-{"token":"<token-from-email>"}
+{"token":"<token-from-email>","password":"password123"}
 ```
 
 **204** on success.
