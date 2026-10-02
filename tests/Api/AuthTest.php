@@ -460,6 +460,194 @@ final class AuthTest extends WebTestCase
         self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
     }
 
+    public function testPasswordResetTokenCannotBeReused(): void
+    {
+        $email = 'reuse-reset@example.com';
+        $oldPassword = 'password123';
+        $newPassword = 'newpassword456';
+        $otherPassword = 'otherpassword789';
+        $this->registerAndVerify($email, $oldPassword);
+
+        $this->jsonRequest('POST', '/api/forgot-password', ['email' => $email]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+        $token = $this->extractTokenFromLastEmail();
+
+        $this->jsonRequest('POST', '/api/reset-password', [
+            'token' => $token,
+            'password' => $newPassword,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+
+        $this->jsonRequest('POST', '/api/reset-password', [
+            'token' => $token,
+            'password' => $otherPassword,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
+
+        $this->jsonRequest('POST', '/api/login', [
+            'email' => $email,
+            'password' => $otherPassword,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+
+        $this->login($email, $newPassword);
+    }
+
+    public function testNewerPasswordResetRequestInvalidatesPreviousToken(): void
+    {
+        $email = 'rotate-reset@example.com';
+        $oldPassword = 'password123';
+        $newPassword = 'newpassword456';
+        $this->registerAndVerify($email, $oldPassword);
+
+        $this->jsonRequest('POST', '/api/forgot-password', ['email' => $email]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+        $firstToken = $this->extractTokenFromLastEmail();
+
+        $this->jsonRequest('POST', '/api/forgot-password', ['email' => $email]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+        $secondToken = $this->extractTokenFromLastEmail();
+        self::assertNotSame($firstToken, $secondToken);
+
+        $this->jsonRequest('POST', '/api/reset-password', [
+            'token' => $firstToken,
+            'password' => $newPassword,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
+        $this->login($email, $oldPassword);
+
+        $this->jsonRequest('POST', '/api/reset-password', [
+            'token' => $secondToken,
+            'password' => $newPassword,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+        $this->login($email, $newPassword);
+    }
+
+    public function testForgotPasswordMatchesStoredEmailRegardlessOfCase(): void
+    {
+        $oldPassword = 'password123';
+        $newPassword = 'newpassword456';
+        $this->registerAndVerify('Alice.Reset@Example.com', $oldPassword);
+
+        $this->jsonRequest('POST', '/api/forgot-password', ['email' => 'alice.reset@example.com']);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+        self::assertEmailCount(1);
+
+        $this->jsonRequest('POST', '/api/reset-password', [
+            'token' => $this->extractTokenFromLastEmail(),
+            'password' => $newPassword,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+
+        $this->login('ALICE.RESET@example.com', $newPassword);
+    }
+
+    public function testShortResetPasswordDoesNotConsumeTheToken(): void
+    {
+        $email = 'short-reset@example.com';
+        $oldPassword = 'password123';
+        $newPassword = 'newpassword456';
+        $this->registerAndVerify($email, $oldPassword);
+
+        $this->jsonRequest('POST', '/api/forgot-password', ['email' => $email]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+        $token = $this->extractTokenFromLastEmail();
+
+        $this->jsonRequest('POST', '/api/reset-password', [
+            'token' => $token,
+            'password' => 'short',
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
+        $body = json_decode($this->client->getResponse()->getContent() ?: '[]', true, 512, \JSON_THROW_ON_ERROR);
+        $paths = array_column($body['violations'] ?? [], 'propertyPath');
+        self::assertContains('password', $paths);
+
+        $this->login($email, $oldPassword);
+
+        $this->jsonRequest('POST', '/api/reset-password', [
+            'token' => $token,
+            'password' => $newPassword,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+        $this->login($email, $newPassword);
+    }
+
+    public function testPasswordResetDoesNotVerifyUnverifiedAccount(): void
+    {
+        $email = 'unverified-reset@example.com';
+        $oldPassword = 'password123';
+        $newPassword = 'newpassword456';
+
+        $this->jsonRequest('POST', '/api/register', [
+            'email' => $email,
+            'password' => $oldPassword,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
+        $verificationToken = $this->extractTokenFromLastEmail();
+
+        $this->jsonRequest('POST', '/api/forgot-password', ['email' => $email]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+        $resetToken = $this->extractTokenFromLastEmail();
+        self::assertNotSame($verificationToken, $resetToken);
+
+        $this->jsonRequest('POST', '/api/reset-password', [
+            'token' => $resetToken,
+            'password' => $newPassword,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+
+        $this->jsonRequest('POST', '/api/login', [
+            'email' => $email,
+            'password' => $newPassword,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+
+        $this->jsonRequest('POST', '/api/login', [
+            'email' => $email,
+            'password' => $oldPassword,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+
+        $this->jsonRequest('POST', '/api/verify-email', [
+            'token' => $verificationToken,
+            'password' => $newPassword,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+
+        $this->login($email, $newPassword);
+    }
+
+    public function testLogoutWithEmptyRefreshTokenRevokesEverySession(): void
+    {
+        $email = 'logout-empty@example.com';
+        $password = 'password123';
+        $this->registerAndVerify($email, $password);
+        $first = $this->login($email, $password);
+        $second = $this->login($email, $password);
+
+        $this->client->request(
+            'POST',
+            '/api/logout',
+            server: [
+                'HTTP_AUTHORIZATION' => 'Bearer '.$first['token'],
+                'CONTENT_TYPE' => 'application/json',
+            ],
+            content: json_encode(['refresh_token' => ''], \JSON_THROW_ON_ERROR),
+        );
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+
+        $this->jsonRequest('POST', '/api/token/refresh', [
+            'refresh_token' => $first['refresh_token'],
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+
+        $this->jsonRequest('POST', '/api/token/refresh', [
+            'refresh_token' => $second['refresh_token'],
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+    }
+
     public function testLogoutWithForeignRefreshTokenDoesNotRevokeOtherSession(): void
     {
         $this->registerAndVerify('owner@example.com', 'password123');
