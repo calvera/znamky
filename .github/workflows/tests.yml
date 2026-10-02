@@ -73,10 +73,6 @@ jobs:
       - name: Run tests with coverage
         run: php bin/phpunit --coverage-text --show-uncovered-for-coverage-text --coverage-clover=var/coverage.clover.xml --coverage-cobertura=var/coverage.cobertura.xml
 
-      - name: Publish coverage summary
-        if: ${{ !cancelled() }}
-        run: php .github/scripts/coverage-summary.php var/coverage.clover.xml
-
       - name: Upload coverage reports
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
