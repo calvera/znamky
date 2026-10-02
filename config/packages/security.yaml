@@ -6,7 +6,9 @@ security:
         app_user_provider:
             entity:
                 class: App\Entity\User
-                property: email
+                # Identifier lookup is UserRepository::loadUserByIdentifier(), which
+                # lowercases email. Do not set "property" here: that path compares
+                # the raw login string and rejects mixed-case addresses.
 
     firewalls:
         dev:

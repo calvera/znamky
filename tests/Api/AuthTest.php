@@ -57,6 +57,31 @@ final class AuthTest extends WebTestCase
         self::assertContains('ROLE_USER', $me['roles']);
     }
 
+    public function testLoginAcceptsEmailCasingUsedAtRegistration(): void
+    {
+        $email = 'Alice.Smith@Example.com';
+        $password = 'password123';
+        $this->registerAndVerify($email, $password);
+
+        $tokens = $this->login($email, $password);
+        self::assertNotEmpty($tokens['token']);
+
+        $this->client->request('GET', '/api/me', server: [
+            'HTTP_AUTHORIZATION' => 'Bearer '.$tokens['token'],
+        ]);
+        self::assertResponseIsSuccessful();
+        $me = json_decode($this->client->getResponse()->getContent() ?: '[]', true, 512, \JSON_THROW_ON_ERROR);
+        self::assertSame(strtolower($email), $me['email']);
+
+        $this->login(strtolower($email), $password);
+
+        $this->jsonRequest('POST', '/api/register', [
+            'email' => strtolower($email),
+            'password' => $password,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
+    }
+
     public function testRegisterDuplicateEmailReturns422(): void
     {
         $payload = ['email' => 'dup@example.com', 'password' => 'password123'];
