@@ -191,6 +191,59 @@ CSV);
         );
     }
 
+    public function testSamePlaceNameWithDifferentUrlsStaysDistinct(): void
+    {
+        $this->writeCsv('cs-stamps.csv', <<<'CSV'
+"Číslo";"Název";"Země";"Typ";"Kategorie";"Okres";"Kraj";"Prodejní místa (název a web)"
+"1";"První";"Česká Republika";"Turistická známka";"Jeseníky";"";"";"Infocentrum (https://a.example)
+Infocentrum (https://b.example)"
+"2";"Druhá";"Česká Republika";"Turistická známka";"Jeseníky";"";"";"Infocentrum (https://a.example)"
+CSV);
+
+        $result = $this->importService->import($this->fixtureDir);
+
+        self::assertSame(2, $result['stamps']);
+        self::assertSame(2, $result['places']);
+        self::assertSame(1, $result['tags']);
+
+        $first = $this->stampRepository->findOneByIdentity(StampCountry::Cz, StampType::Regular, 1);
+        $second = $this->stampRepository->findOneByIdentity(StampCountry::Cz, StampType::Regular, 2);
+        self::assertInstanceOf(Stamp::class, $first);
+        self::assertInstanceOf(Stamp::class, $second);
+        self::assertCount(2, $first->getPlaces());
+        self::assertCount(1, $second->getPlaces());
+
+        $shared = $second->getPlaces()->first();
+        self::assertInstanceOf(StampPlace::class, $shared);
+        self::assertSame('https://a.example', $shared->getUrl());
+        self::assertTrue($first->getPlaces()->contains($shared));
+
+        $urls = [];
+        foreach ($first->getPlaces() as $place) {
+            $urls[] = $place->getUrl();
+        }
+        sort($urls);
+        self::assertSame(['https://a.example', 'https://b.example'], $urls);
+
+        $tag = $first->getTags()->first();
+        self::assertInstanceOf(StampTag::class, $tag);
+        self::assertSame('Jeseníky', $tag->getName());
+        self::assertSame('jeseniky', $tag->getSlug());
+    }
+
+    public function testImportRejectsUnknownStampType(): void
+    {
+        $this->writeCsv('cs-stamps.csv', <<<'CSV'
+"Číslo";"Název";"Země";"Typ"
+"1";"X";"Česká Republika";"Neznámý"
+CSV);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Neznámý');
+
+        $this->importService->import($this->fixtureDir);
+    }
+
     public function testImportRejectsUnknownCountry(): void
     {
         $this->writeCsv('cs-stamps.csv', <<<'CSV'
