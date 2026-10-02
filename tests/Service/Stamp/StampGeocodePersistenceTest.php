@@ -126,6 +126,53 @@ final class StampGeocodePersistenceTest extends KernelTestCase
         self::assertNull($blank->getLatitude());
     }
 
+    public function testHalfFilledCoordinatesAreStillGeocoded(): void
+    {
+        $latOnly = (new Stamp())
+            ->setCountry(StampCountry::Cz)
+            ->setType(StampType::Regular)
+            ->setNumber(1)
+            ->setName('Jen šířka')
+            ->setLatitude(10.0);
+        $lngOnly = (new StampPlace())
+            ->setName('Jen délka')
+            ->setLongitude(20.0);
+
+        $this->em->persist($latOnly);
+        $this->em->persist($lngOnly);
+        $this->em->flush();
+        $this->em->clear();
+
+        $calls = [];
+        $this->replaceGeocoder($calls);
+
+        /** @var StampGeocodeService $service */
+        $service = static::getContainer()->get(StampGeocodeService::class);
+
+        self::assertSame(
+            ['geocoded' => 1, 'skipped' => 0, 'failed' => 0],
+            $service->geocodeStamps(false),
+        );
+        self::assertSame(
+            ['geocoded' => 1, 'skipped' => 0, 'failed' => 0],
+            $service->geocodePlaces(false),
+        );
+        self::assertSame([
+            'Jen šířka, Czech Republic',
+            'Jen délka',
+        ], $calls);
+
+        $stamp = $this->stamps()->findOneByIdentity(StampCountry::Cz, StampType::Regular, 1);
+        self::assertInstanceOf(Stamp::class, $stamp);
+        self::assertSame(50.5, $stamp->getLatitude());
+        self::assertSame(17.5, $stamp->getLongitude());
+
+        $place = $this->places()->findOneByNameAndUrl('Jen délka', null);
+        self::assertInstanceOf(StampPlace::class, $place);
+        self::assertSame(50.5, $place->getLatitude());
+        self::assertSame(17.5, $place->getLongitude());
+    }
+
     public function testForceGeocodeRewritesExistingCoordinates(): void
     {
         $stamp = (new Stamp())
