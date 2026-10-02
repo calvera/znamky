@@ -285,7 +285,10 @@ final class AuthTest extends WebTestCase
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
 
-        $this->jsonRequest('POST', '/api/verify-email', ['token' => $token]);
+        $this->jsonRequest('POST', '/api/verify-email', [
+            'token' => $token,
+            'password' => 'password123',
+        ]);
         self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
 
         $tokens = $this->login('user@example.com', 'password123');
@@ -309,7 +312,10 @@ final class AuthTest extends WebTestCase
         $token = $this->extractTokenFromLastEmail();
         $this->expireUserToken($email, 'emailVerificationTokenExpiresAt');
 
-        $this->jsonRequest('POST', '/api/verify-email', ['token' => $token]);
+        $this->jsonRequest('POST', '/api/verify-email', [
+            'token' => $token,
+            'password' => $password,
+        ]);
         self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
 
         $this->jsonRequest('POST', '/api/login', [
@@ -330,10 +336,16 @@ final class AuthTest extends WebTestCase
         self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
         $token = $this->extractTokenFromLastEmail();
 
-        $this->jsonRequest('POST', '/api/verify-email', ['token' => $token]);
+        $this->jsonRequest('POST', '/api/verify-email', [
+            'token' => $token,
+            'password' => $password,
+        ]);
         self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
 
-        $this->jsonRequest('POST', '/api/verify-email', ['token' => $token]);
+        $this->jsonRequest('POST', '/api/verify-email', [
+            'token' => $token,
+            'password' => $password,
+        ]);
         self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
 
         $this->login($email, $password);
@@ -421,7 +433,10 @@ final class AuthTest extends WebTestCase
             'password' => 'password123',
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
-        $this->jsonRequest('POST', '/api/verify-email', ['token' => $this->extractTokenFromLastEmail()]);
+        $this->jsonRequest('POST', '/api/verify-email', [
+            'token' => $this->extractTokenFromLastEmail(),
+            'password' => 'password123',
+        ]);
         self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
         $other = $this->login('other@example.com', 'password123');
 
