@@ -182,7 +182,7 @@ final class AuthOpenApiFactory implements OpenApiFactoryInterface
                 ),
             ],
             summary: 'Reset password with email token',
-            description: 'Sets a new password using the raw token from the reset email. Revokes all refresh tokens for the user.',
+            description: 'Sets a new password using the raw token from the reset email. Revokes all refresh tokens for the user. Does not verify the email; an unverified account must still confirm the original verification token.',
             requestBody: new RequestBody(
                 description: 'Reset token and new password',
                 content: new \ArrayObject([
