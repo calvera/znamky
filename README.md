@@ -42,7 +42,7 @@ php bin/console api:openapi:export --yaml > docs/openapi.yaml
 ## Auth overview
 
 1. `POST /api/register` — creates an unverified user and emails a verification token
-2. `POST /api/verify-email` — confirms the email with that token
+2. `POST /api/verify-email` — confirms the email and sets the account password
 3. `POST /api/login` — returns JWT + refresh token (verified users only)
 4. Authenticated calls use `Authorization: Bearer <token>`
 5. `POST /api/token/refresh` — exchanges a refresh token for a new pair

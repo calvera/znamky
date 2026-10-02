@@ -29,12 +29,7 @@ final class AuthOpenApiFactory implements OpenApiFactoryInterface
         $paths = $openApi->getPaths();
 
         $paths->addPath('/api/register', new PathItem(post: $this->registerOperation()));
-        $paths->addPath('/api/verify-email', new PathItem(post: $this->tokenOperation(
-            operationId: 'api_verify_email_post',
-            summary: 'Verify email address',
-            description: 'Confirms the account using the raw token from the verification email.',
-            tokenDescription: 'Verification token from the email',
-        )));
+        $paths->addPath('/api/verify-email', new PathItem(post: $this->verifyEmailOperation()));
         $paths->addPath('/api/forgot-password', new PathItem(post: $this->forgotPasswordOperation()));
         $paths->addPath('/api/reset-password', new PathItem(post: $this->resetPasswordOperation()));
         $paths->addPath('/api/logout', new PathItem(post: $this->logoutOperation()));
@@ -112,27 +107,28 @@ final class AuthOpenApiFactory implements OpenApiFactoryInterface
         );
     }
 
-    private function tokenOperation(string $operationId, string $summary, string $description, string $tokenDescription): Operation
+    private function verifyEmailOperation(): Operation
     {
         return new Operation(
-            operationId: $operationId,
+            operationId: 'api_verify_email_post',
             tags: ['Authentication'],
             responses: [
-                (string) HttpResponse::HTTP_NO_CONTENT => new Response(description: 'Success'),
+                (string) HttpResponse::HTTP_NO_CONTENT => new Response(description: 'Email verified and password set'),
                 (string) HttpResponse::HTTP_UNPROCESSABLE_ENTITY => $this->validationFailedResponse(
                     'Invalid payload, or invalid/expired token',
                 ),
             ],
-            summary: $summary,
-            description: $description,
+            summary: 'Verify email address',
+            description: 'Confirms the account using the raw token from the verification email. The password in this request becomes the account password and replaces the one from registration.',
             requestBody: new RequestBody(
-                description: $tokenDescription,
+                description: 'Verification token and the password chosen by the mailbox owner',
                 content: new \ArrayObject([
                     'application/json' => new MediaType(schema: new \ArrayObject([
                         'type' => 'object',
-                        'required' => ['token'],
+                        'required' => ['token', 'password'],
                         'properties' => [
                             'token' => ['type' => 'string'],
+                            'password' => ['type' => 'string', 'minLength' => 8],
                         ],
                     ])),
                 ]),

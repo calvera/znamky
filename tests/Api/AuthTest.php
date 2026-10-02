@@ -41,7 +41,10 @@ final class AuthTest extends WebTestCase
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
 
-        $this->jsonRequest('POST', '/api/verify-email', ['token' => $verificationToken]);
+        $this->jsonRequest('POST', '/api/verify-email', [
+            'token' => $verificationToken,
+            'password' => $password,
+        ]);
         self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
 
         $tokens = $this->login($email, $password);
@@ -176,8 +179,61 @@ final class AuthTest extends WebTestCase
 
     public function testInvalidVerificationTokenReturns422(): void
     {
-        $this->jsonRequest('POST', '/api/verify-email', ['token' => 'invalid-token']);
+        $this->jsonRequest('POST', '/api/verify-email', [
+            'token' => 'invalid-token',
+            'password' => 'password123',
+        ]);
         self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
+    }
+
+    public function testVerifyReplacesPasswordFromRegistration(): void
+    {
+        $email = 'victim@example.com';
+        $registrationPassword = 'attacker-password';
+        $ownerPassword = 'owner-password-1';
+
+        $this->jsonRequest('POST', '/api/register', [
+            'email' => $email,
+            'password' => $registrationPassword,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
+        $token = $this->extractTokenFromLastEmail();
+
+        $this->jsonRequest('POST', '/api/verify-email', [
+            'token' => $token,
+            'password' => $ownerPassword,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+
+        $this->jsonRequest('POST', '/api/login', [
+            'email' => $email,
+            'password' => $registrationPassword,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+
+        $this->login($email, $ownerPassword);
+    }
+
+    public function testVerifyWithoutPasswordLeavesAccountUnverified(): void
+    {
+        $email = 'pending@example.com';
+        $password = 'password123';
+
+        $this->jsonRequest('POST', '/api/register', [
+            'email' => $email,
+            'password' => $password,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
+        $token = $this->extractTokenFromLastEmail();
+
+        $this->jsonRequest('POST', '/api/verify-email', ['token' => $token]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
+
+        $this->jsonRequest('POST', '/api/login', [
+            'email' => $email,
+            'password' => $password,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
     }
 
     public function testMeWithoutJwtReturns401(): void
@@ -226,7 +282,10 @@ final class AuthTest extends WebTestCase
         self::assertEmailCount(1);
 
         $token = $this->extractTokenFromLastEmail();
-        $this->jsonRequest('POST', '/api/verify-email', ['token' => $token]);
+        $this->jsonRequest('POST', '/api/verify-email', [
+            'token' => $token,
+            'password' => $password,
+        ]);
         self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
     }
 

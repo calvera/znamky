@@ -111,7 +111,10 @@ final class StampCatalogTest extends WebTestCase
         self::assertMatchesRegularExpression('/([a-f0-9]{64})/', $body);
         preg_match('/([a-f0-9]{64})/', $body, $matches);
 
-        $this->jsonRequest('POST', '/api/verify-email', ['token' => $matches[1]]);
+        $this->jsonRequest('POST', '/api/verify-email', [
+            'token' => $matches[1],
+            'password' => $password,
+        ]);
         self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
 
         $this->jsonRequest('POST', '/api/login', [

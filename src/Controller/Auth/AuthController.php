@@ -8,7 +8,7 @@ use App\Dto\Auth\ForgotPasswordRequest;
 use App\Dto\Auth\LogoutRequest;
 use App\Dto\Auth\RegisterRequest;
 use App\Dto\Auth\ResetPasswordRequest;
-use App\Dto\Auth\TokenRequest;
+use App\Dto\Auth\VerifyEmailRequest;
 use App\Entity\User;
 use App\Service\Auth\EmailVerificationService;
 use App\Service\Auth\LogoutService;
@@ -43,10 +43,10 @@ final class AuthController extends AbstractController
     #[Route('/verify-email', name: 'api_verify_email', methods: ['POST'])]
     public function verifyEmail(
         #[MapRequestPayload]
-        TokenRequest $request,
+        VerifyEmailRequest $request,
         EmailVerificationService $emailVerificationService,
     ): Response {
-        $emailVerificationService->verify($request->token);
+        $emailVerificationService->verify($request->token, $request->password);
 
         return new Response(status: Response::HTTP_NO_CONTENT);
     }

@@ -184,7 +184,7 @@ paths:
         - Authentication
       responses:
         '204':
-          description: Success
+          description: 'Email verified and password set'
         '422':
           description: 'Invalid payload, or invalid/expired token'
           content:
@@ -192,18 +192,22 @@ paths:
               schema:
                 $ref: '#/components/schemas/ValidationFailed'
       summary: 'Verify email address'
-      description: 'Confirms the account using the raw token from the verification email.'
+      description: 'Confirms the account using the raw token from the verification email. The password in this request becomes the account password and replaces the one from registration.'
       requestBody:
-        description: 'Verification token from the email'
+        description: 'Verification token and the password chosen by the mailbox owner'
         content:
           application/json:
             schema:
               type: object
               required:
                 - token
+                - password
               properties:
                 token:
                   type: string
+                password:
+                  type: string
+                  minLength: 8
         required: true
       security: []
   /api/login:
