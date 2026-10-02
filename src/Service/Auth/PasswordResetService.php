@@ -53,14 +53,6 @@ final class PasswordResetService
         }
 
         $user->setPassword($this->passwordHasher->hashPassword($user, $plainPassword));
-        // The reset token was mailed to the account address, which is the same
-        // proof as email verification. Without this, an unverified account whose
-        // verification token expired (or was never delivered) can reset the
-        // password and still be unable to log in, with no other recovery path.
-        // Clearing the verification token stops it from replacing this password.
-        $user->setIsVerified(true);
-        $user->setEmailVerificationToken(null);
-        $user->setEmailVerificationTokenExpiresAt(null);
         $user->setPasswordResetToken(null);
         $user->setPasswordResetTokenExpiresAt(null);
 

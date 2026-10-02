@@ -94,9 +94,9 @@ Content-Type: application/json
 {"token":"<token-from-email>","password":"newpassword123"}
 ```
 
-**204** on success. All refresh tokens for the user are revoked. The account is
-marked verified, and any outstanding email-verification token is invalidated, so
-a reset also unlocks an account that never finished `POST /api/verify-email`.
+**204** on success. All refresh tokens for the user are revoked. Reset does not
+verify the email; an unverified account still has to `POST /api/verify-email`
+with the original verification token and the password set here.
 
 ## Logout
 

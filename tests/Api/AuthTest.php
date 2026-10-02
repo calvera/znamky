@@ -360,44 +360,6 @@ final class AuthTest extends WebTestCase
         self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
     }
 
-    public function testPasswordResetActivatesUnverifiedAccountAndBurnsVerificationToken(): void
-    {
-        $email = 'stuck@example.com';
-        $registrationPassword = 'password123';
-        $resetPassword = 'resetpassword1';
-
-        $this->jsonRequest('POST', '/api/register', [
-            'email' => $email,
-            'password' => $registrationPassword,
-        ]);
-        self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
-        $verificationToken = $this->extractTokenFromLastEmail();
-
-        $this->jsonRequest('POST', '/api/forgot-password', ['email' => $email]);
-        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
-        $resetToken = $this->extractTokenFromLastEmail();
-
-        $this->jsonRequest('POST', '/api/reset-password', [
-            'token' => $resetToken,
-            'password' => $resetPassword,
-        ]);
-        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
-
-        $this->jsonRequest('POST', '/api/verify-email', [
-            'token' => $verificationToken,
-            'password' => 'attacker-password',
-        ]);
-        self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
-
-        $this->jsonRequest('POST', '/api/login', [
-            'email' => $email,
-            'password' => $registrationPassword,
-        ]);
-        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
-
-        $this->login($email, $resetPassword);
-    }
-
     public function testExpiredPasswordResetTokenKeepsOldPassword(): void
     {
         $email = 'expired-reset@example.com';
