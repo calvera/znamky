@@ -69,6 +69,10 @@ geocode queries.
 php bin/phpunit
 ```
 
+GitHub Actions (`.github/workflows/tests.yml`) runs this suite on every push and
+pull request against PostgreSQL 16. The job prints PHPUnit's coverage report in
+the logs and uploads Clover and Cobertura reports as artifacts.
+
 ## Stack
 
 - Symfony 8.1, API Platform 5, Doctrine ORM, PostgreSQL
