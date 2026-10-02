@@ -571,7 +571,10 @@ final class AuthTest extends WebTestCase
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
 
-        $this->jsonRequest('POST', '/api/verify-email', ['token' => $verificationToken]);
+        $this->jsonRequest('POST', '/api/verify-email', [
+            'token' => $verificationToken,
+            'password' => $newPassword,
+        ]);
         self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
 
         $this->login($email, $newPassword);
