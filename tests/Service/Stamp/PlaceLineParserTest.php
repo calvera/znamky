@@ -86,4 +86,26 @@ final class PlaceLineParserTest extends TestCase
         self::assertSame([], $this->parser->parseCell(''));
         self::assertSame([], $this->parser->parseTags(null));
     }
+
+    public function testParentheticalNoteIsNotTreatedAsUrl(): void
+    {
+        self::assertSame([
+            'name' => 'Hotel Luční Bouda (recepce hotelu)',
+            'url' => null,
+        ], $this->parser->parseLine('Hotel Luční Bouda (recepce hotelu)'));
+    }
+
+    public function testUrlOnlyLineIsIgnored(): void
+    {
+        self::assertNull($this->parser->parseLine('(https://example.com)'));
+        self::assertSame([], $this->parser->parseCell("(https://example.com)\n\n"));
+    }
+
+    public function testParseTagsDropsDuplicatesAndBlanks(): void
+    {
+        self::assertSame(
+            ['Hory', 'Jeseníky'],
+            $this->parser->parseTags('Hory, , Jeseníky, Hory'),
+        );
+    }
 }

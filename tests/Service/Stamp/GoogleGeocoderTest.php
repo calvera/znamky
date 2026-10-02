@@ -68,4 +68,38 @@ final class GoogleGeocoderTest extends TestCase
         $this->expectExceptionMessage('GOOGLE_MAPS_API_KEY');
         $geocoder->geocode('Praděd');
     }
+
+    public function testBlankAddressReturnsNullWithoutRequest(): void
+    {
+        $client = new MockHttpClient(function (): MockResponse {
+            self::fail('Blank addresses must not call Google.');
+        });
+
+        self::assertNull((new GoogleGeocoder($client, 'test-key'))->geocode('   '));
+    }
+
+    public function testHttpErrorThrows(): void
+    {
+        $client = new MockHttpClient([
+            new MockResponse('unavailable', ['http_code' => 503]),
+        ]);
+
+        $geocoder = new GoogleGeocoder($client, 'test-key');
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('status 503');
+        $geocoder->geocode('Praděd');
+    }
+
+    public function testOkResponseWithoutCoordinatesReturnsNull(): void
+    {
+        $client = new MockHttpClient([
+            new MockResponse(json_encode([
+                'status' => 'OK',
+                'results' => [['geometry' => ['location' => []]]],
+            ], \JSON_THROW_ON_ERROR)),
+        ]);
+
+        self::assertNull((new GoogleGeocoder($client, 'test-key'))->geocode('Praděd'));
+    }
 }
