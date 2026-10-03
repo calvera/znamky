@@ -18,7 +18,49 @@ Interactive docs: [`/api/docs`](/api/docs). Machine-readable: [`openapi.yaml`](o
 | `POST` | `/api/logout` | JWT | Invalidate JWT (and refresh token(s)) |
 | `GET` | `/api/me` | JWT | Current user profile |
 
-All other `/api/*` routes require a valid JWT (`IS_AUTHENTICATED_FULLY`).
+All other `/api/*` routes require a valid JWT (`IS_AUTHENTICATED_FULLY`), except
+`/api/graphql` (public entrypoint; operation-level security applies).
+
+## GraphQL
+
+`POST /api/graphql` (IDE at `/api/graphql/graphiql`). Auth mutations reuse the
+same services and rules as REST. Stamp catalog queries still require JWT.
+
+| Field | Auth | Purpose |
+|-------|------|---------|
+| `registerUser` | — | Create account; send verification email |
+| `verifyEmailUser` | — | Confirm email and set the account password |
+| `loginUser` | — | Issue JWT + refresh token |
+| `refreshTokenUser` | — | Rotate JWT using refresh token |
+| `forgotPasswordUser` | — | Send password-reset email |
+| `resetPasswordUser` | — | Set new password with reset token |
+| `logoutUser` | JWT | Invalidate JWT (and refresh token(s)) |
+| `meUser` | JWT | Current user profile |
+
+Example:
+
+```graphql
+mutation {
+  registerUser(input: { email: "user@example.com", password: "password123" }) {
+    user { id email }
+  }
+}
+
+mutation {
+  loginUser(input: { email: "user@example.com", password: "password123" }) {
+    user { token refreshToken }
+  }
+}
+
+query {
+  meUser {
+    email
+    roles
+  }
+}
+```
+
+Code: `src/ApiResource/Auth.php`, resolvers in `src/GraphQl/Resolver/Auth/`.
 
 ## Register → verify → login
 
@@ -165,9 +207,11 @@ Put real secrets in `.env.local` (git-ignored), not in committed `.env`:
 | HTTP routes | `src/Controller/Auth/AuthController.php` |
 | Request DTOs | `src/Dto/Auth/` |
 | Domain services | `src/Service/Auth/` |
+| GraphQL resource | `src/ApiResource/Auth.php` |
+| GraphQL resolvers | `src/GraphQl/Resolver/Auth/` |
 | User entity | `src/Entity/User.php` |
 | Block unverified login | `src/Security/UserChecker.php` |
 | Validation error JSON | `src/EventSubscriber/ValidationFailedExceptionSubscriber.php` |
 | OpenAPI auth paths | `src/OpenApi/AuthOpenApiFactory.php` |
 | Email templates | `templates/email/` |
-| Functional tests | `tests/Api/AuthTest.php` |
+| Functional tests | `tests/Api/AuthTest.php`, `tests/Api/AuthGraphQlTest.php` |

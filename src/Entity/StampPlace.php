@@ -26,8 +26,8 @@ use Symfony\Component\Validator\Constraints as Assert;
         new GetCollection(),
     ],
     graphQlOperations: [
-        new Query(),
-        new QueryCollection(),
+        new Query(security: 'is_granted("IS_AUTHENTICATED_FULLY")'),
+        new QueryCollection(security: 'is_granted("IS_AUTHENTICATED_FULLY")'),
     ],
     normalizationContext: ['groups' => ['stamp_place:read']],
 )]

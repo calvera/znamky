@@ -110,12 +110,14 @@ GET /api/stamp_tags?slug=jeseníky
 Authorization: Bearer <jwt>
 ```
 
-### GraphQL (read-only, JWT required)
+### GraphQL (read-only catalog, JWT required)
 
-`POST /api/graphql` with `Authorization: Bearer <jwt>`. GraphiQL UI at
+`POST /api/graphql` is a public entrypoint (auth mutations do not need a token).
+Stamp catalog queries still require `Authorization: Bearer <jwt>`. GraphiQL UI at
 `/api/graphql/graphiql` is public (paste the Bearer token in the IDE headers).
 Root queries: `stamps`, `stamp`, `stampTags`, `stampTag`, `stampPlaces`,
-`stampPlace`. Filters match the REST SearchFilter/OrderFilter arguments.
+`stampPlace`. Filters match the REST SearchFilter/OrderFilter arguments. No
+stamp create/update/delete mutations.
 
 ```http
 POST /api/graphql
@@ -138,4 +140,5 @@ php bin/phpunit tests/Api/StampGraphQlTest.php
 Service tests cover place/tag parsing, Google geocoder (mocked HTTP), import
 shared-place reuse, and stamp geocode query building. `StampCatalogTest` covers
 JWT gating and collection/filter responses for stamps, tags, and places.
-`StampGraphQlTest` covers GraphQL auth, collection query, and no mutations.
+`StampGraphQlTest` covers GraphQL JWT gating, collection query, and no catalog
+mutations (auth mutations live separately; see `docs/auth.md`).

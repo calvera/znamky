@@ -32,7 +32,7 @@ them) — including `APP_SECRET`, `JWT_PASSPHRASE`, and `GOOGLE_MAPS_API_KEY`.
 | [docs/stamps.md](docs/stamps.md) | Stamp catalog, CSV import, geocoding, read-only API |
 | [docs/openapi.yaml](docs/openapi.yaml) | OpenAPI 3 spec (auth + stamp resources) |
 | `/api/docs` | Interactive Swagger UI |
-| `/api/graphql` | GraphQL endpoint (JWT); IDE at `/api/graphql/graphiql` |
+| `/api/graphql` | GraphQL (public entry; auth mutations + JWT stamp queries); IDE at `/api/graphql/graphiql` |
 
 Export the live OpenAPI document anytime:
 
@@ -49,6 +49,10 @@ php bin/console api:openapi:export --yaml > docs/openapi.yaml
 5. `POST /api/token/refresh` — exchanges a refresh token for a new pair
 6. `POST /api/logout` — blocklists JWT; revokes refresh token(s)
 7. Password reset: `POST /api/forgot-password` then `POST /api/reset-password`
+
+The same flows are available as GraphQL mutations/queries on `POST /api/graphql`
+(`registerUser`, `verifyEmailUser`, `loginUser`, `refreshTokenUser`,
+`forgotPasswordUser`, `resetPasswordUser`, `logoutUser`, `meUser`).
 
 DTO validation failures return **422** with `{ title, detail, violations[] }`.
 See [docs/auth.md](docs/auth.md).

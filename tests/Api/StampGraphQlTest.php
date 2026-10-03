@@ -32,10 +32,18 @@ final class StampGraphQlTest extends WebTestCase
         $this->seedCatalog();
     }
 
-    public function testGraphQlRequiresAuthentication(): void
+    public function testStampQueriesRequireAuthentication(): void
     {
-        $this->graphql('{ stamps { edges { node { name } } } }');
-        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+        $payload = $this->graphql('{ stamps { edges { node { name } } } }');
+
+        if (Response::HTTP_UNAUTHORIZED === $this->client->getResponse()->getStatusCode()) {
+            self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+
+            return;
+        }
+
+        self::assertResponseIsSuccessful();
+        self::assertArrayHasKey('errors', $payload);
     }
 
     public function testGraphiqlIsPublic(): void
@@ -44,7 +52,7 @@ final class StampGraphQlTest extends WebTestCase
         self::assertResponseIsSuccessful();
     }
 
-    public function testStampCollectionQueryAndNoMutations(): void
+    public function testStampCollectionQueryAndNoCatalogMutations(): void
     {
         $token = $this->authenticate();
 
@@ -95,14 +103,20 @@ final class StampGraphQlTest extends WebTestCase
         $schemaData = $this->stringKeyedArray($schema['data'] ?? null, 'GraphQL schema data');
         $schemaRoot = $this->stringKeyedArray($schemaData['__schema'] ?? null, 'GraphQL __schema');
         $mutationType = $schemaRoot['mutationType'] ?? null;
-        $mutationFields = null;
-        if (\is_array($mutationType)) {
-            $mutationFields = $mutationType['fields'] ?? null;
+        $mutationFields = [];
+        if (\is_array($mutationType) && \is_array($mutationType['fields'] ?? null)) {
+            foreach ($mutationType['fields'] as $field) {
+                if (\is_array($field) && \is_string($field['name'] ?? null)) {
+                    $mutationFields[] = $field['name'];
+                }
+            }
         }
-        self::assertTrue(
-            null === $mutationFields || [] === $mutationFields,
-            'Stamp catalog must not expose GraphQL mutations',
-        );
+
+        foreach (['createStamp', 'updateStamp', 'deleteStamp', 'createStampTag', 'createStampPlace'] as $forbidden) {
+            self::assertNotContains($forbidden, $mutationFields, 'Stamp catalog must not expose write mutations');
+        }
+        self::assertContains('registerUser', $mutationFields);
+        self::assertContains('loginUser', $mutationFields);
     }
 
     /**

@@ -16,6 +16,11 @@ final class ValidationFailedExceptionSubscriber
     #[AsEventListener(event: KernelEvents::EXCEPTION)]
     public function onException(ExceptionEvent $event): void
     {
+        $path = $event->getRequest()->getPathInfo();
+        if (str_starts_with($path, '/api/graphql')) {
+            return;
+        }
+
         $validationFailed = $this->findValidationFailedException($event->getThrowable());
         if (null === $validationFailed) {
             return;

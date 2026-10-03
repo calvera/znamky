@@ -10,8 +10,8 @@ api_platform:
         Validation errors for auth request DTOs return **422** with a
         `ValidationFailed` body (`title`, `detail`, `violations[]`).
 
-        GraphQL (read-only stamp catalog): `POST /api/graphql`, IDE at
-        `/api/graphql/graphiql`.
+        GraphQL: `POST /api/graphql` (public entrypoint; auth mutations plus
+        JWT-protected stamp catalog queries), IDE at `/api/graphql/graphiql`.
 
         Human docs: `docs/auth.md` (auth), `docs/stamps.md` (stamp catalog).
     defaults:

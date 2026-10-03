@@ -12,21 +12,29 @@ Do not re-ask these. Follow the existing patterns under `src/` and `config/`.
 - **Persistence:** Doctrine ORM on PostgreSQL. Schema changes go through migrations.
 - **Interface:** JSON API under `/api` (API Platform + thin controllers), plus GraphQL at
   `/api/graphql` (`api-platform/graphql`, GraphiQL at `/api/graphql/graphiql`). Twig is for
-  email templates only, not server-rendered pages.
+  email templates only, not server-rendered pages. `/api/graphql` is `PUBLIC_ACCESS`;
+  stamp queries and authenticated auth ops enforce JWT via operation `security`.
 - **Auth:** Lexik JWT (`Authorization: Bearer`) with Gesdinet refresh tokens.
-  - Login: `POST /api/login` (`email` + `password`) via `json_login`.
-  - Refresh: `POST /api/token/refresh`.
+  - Login: `POST /api/login` (`email` + `password`) via `json_login`, or GraphQL
+    `loginUser`.
+  - Refresh: `POST /api/token/refresh`, or GraphQL `refreshTokenUser`.
   - User provider: `App\Entity\User` by email.
   - Unverified users cannot authenticate (`App\Security\UserChecker`).
+  - GraphQL auth: `App\ApiResource\Auth` mutations/queries (`registerUser`,
+    `verifyEmailUser`, `loginUser`, `refreshTokenUser`, `forgotPasswordUser`,
+    `resetPasswordUser`, `logoutUser`, `meUser`) via resolvers in
+    `src/GraphQl/Resolver/Auth/`.
 - **Email flows (API-token, not frontend links):** Mailer sends a raw token; the client posts
-  it to the API (`POST /api/verify-email`, `POST /api/reset-password`). Register at
-  `POST /api/register`; forgot password at `POST /api/forgot-password`.
+  it to the API (`POST /api/verify-email`, `POST /api/reset-password`) or GraphQL
+  equivalents. Register at `POST /api/register`; forgot password at
+  `POST /api/forgot-password`.
 - **Auth code layout:** Controllers in `src/Controller/Auth/`, DTOs in `src/Dto/Auth/`,
-  services in `src/Service/Auth/`. Prefer extending these over inventing parallel stacks.
+  services in `src/Service/Auth/`, GraphQL in `src/ApiResource/Auth.php` +
+  `src/GraphQl/`. Prefer extending these over inventing parallel stacks.
 - **Stamp catalog:** Read-only API Platform resources (`Stamp`, `StampTag`,
   `StampPlace`) under `/api/stamps`, `/api/stamp_tags`, `/api/stamp_places`, and
   matching GraphQL queries (`graphQlOperations`: `Query` + `QueryCollection` only —
-  no mutations).
+  no mutations; JWT required via operation security).
   - Identity: stamp `(country, type, number)`; country `CZ`/`SK`, type
     `regular`/`annual` (`App\Enum\StampCountry`, `App\Enum\StampType`).
   - Tags and places are shared catalogs (M2M from Stamp). Places dedupe by
