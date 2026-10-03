@@ -5,11 +5,21 @@ declare(strict_types=1);
 namespace App\Tests\Api;
 
 use App\Entity\User;
+use App\Repository\UserRepository;
+use App\Security\TokenHasher;
+use App\Service\Auth\AuthMailer;
+use App\Service\Auth\PasswordResetService;
 use Doctrine\ORM\EntityManagerInterface;
+use Gesdinet\JWTRefreshTokenBundle\Model\RevokeRefreshTokenManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\MailerAssertionsTrait;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Mailer\Envelope;
+use Symfony\Component\Mailer\Exception\TransportException;
+use Symfony\Component\Mailer\MailerInterface;
+use Symfony\Component\Mime\RawMessage;
+use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 
 final class AuthTest extends WebTestCase
 {
@@ -21,6 +31,78 @@ final class AuthTest extends WebTestCase
     {
         $this->client = static::createClient();
         $this->purgeDatabase();
+    }
+
+    public function testRegisterDoesNotKeepTheAccountWhenVerificationEmailFails(): void
+    {
+        $this->installThrowingMailer();
+
+        $this->jsonRequest('POST', '/api/register', [
+            'email' => 'smtp-down@example.com',
+            'password' => 'password123',
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_INTERNAL_SERVER_ERROR);
+
+        // A new PHP request must not find an account that never received its token.
+        static::ensureKernelShutdown();
+        $this->client = static::createClient();
+
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        self::assertNull($em->getRepository(User::class)->findOneBy(['email' => 'smtp-down@example.com']));
+
+        $this->jsonRequest('POST', '/api/register', [
+            'email' => 'smtp-down@example.com',
+            'password' => 'password123',
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
+
+        $this->jsonRequest('POST', '/api/verify-email', [
+            'token' => $this->extractTokenFromLastEmail(),
+            'password' => 'password123',
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+        $this->login('smtp-down@example.com', 'password123');
+    }
+
+    public function testFailedPasswordResetEmailDoesNotInvalidateThePreviousToken(): void
+    {
+        $email = 'reset-smtp@example.com';
+        $this->registerAndVerify($email, 'password123');
+
+        $this->jsonRequest('POST', '/api/forgot-password', ['email' => $email]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+        $token = $this->extractTokenFromLastEmail();
+
+        $reset = new PasswordResetService(
+            static::getContainer()->get(UserRepository::class),
+            static::getContainer()->get(EntityManagerInterface::class),
+            static::getContainer()->get(TokenHasher::class),
+            new AuthMailer(new class implements MailerInterface {
+                public function send(RawMessage $message, ?Envelope $envelope = null): void
+                {
+                    throw new TransportException('SMTP down');
+                }
+            }, 'noreply@znamky.local'),
+            static::getContainer()->get(UserPasswordHasherInterface::class),
+            static::getContainer()->get(RevokeRefreshTokenManagerInterface::class),
+        );
+
+        try {
+            $reset->requestReset($email);
+            self::fail('A mail transport failure was expected.');
+        } catch (TransportException) {
+        }
+
+        static::ensureKernelShutdown();
+        $this->client = static::createClient();
+
+        $this->jsonRequest('POST', '/api/reset-password', [
+            'token' => $token,
+            'password' => 'newpassword456',
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+        $this->login($email, 'newpassword456');
     }
 
     public function testRegisterVerifyLoginAndMe(): void
@@ -813,6 +895,16 @@ final class AuthTest extends WebTestCase
     /**
      * @param array<string, mixed> $payload
      */
+    private function installThrowingMailer(): void
+    {
+        static::getContainer()->set(MailerInterface::class, new class implements MailerInterface {
+            public function send(RawMessage $message, ?Envelope $envelope = null): void
+            {
+                throw new TransportException('SMTP down');
+            }
+        });
+    }
+
     private function jsonRequest(string $method, string $uri, array $payload = []): void
     {
         $this->client->request(

@@ -8,6 +8,7 @@ use App\Dto\Auth\RegisterRequest;
 use App\Entity\User;
 use App\Repository\UserRepository;
 use App\Security\TokenHasher;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Validator\Exception\ValidationFailedException;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
@@ -16,6 +17,7 @@ final class UserRegistrationService
 {
     public function __construct(
         private readonly UserRepository $userRepository,
+        private readonly EntityManagerInterface $entityManager,
         private readonly UserPasswordHasherInterface $passwordHasher,
         private readonly TokenHasher $tokenHasher,
         private readonly AuthMailer $authMailer,
@@ -39,8 +41,13 @@ final class UserRegistrationService
         $user->setEmailVerificationTokenExpiresAt(new \DateTimeImmutable('+1 day'));
         $user->setIsVerified(false);
 
-        $this->userRepository->save($user);
-        $this->authMailer->sendEmailVerification($user, $rawToken);
+        // The raw token exists only in the email. Commit the account only after
+        // that send succeeds, or a transient SMTP failure leaves an address that
+        // can never be verified and can never be registered again.
+        $this->entityManager->wrapInTransaction(function () use ($user, $rawToken): void {
+            $this->userRepository->save($user);
+            $this->authMailer->sendEmailVerification($user, $rawToken);
+        });
 
         return $user;
     }
