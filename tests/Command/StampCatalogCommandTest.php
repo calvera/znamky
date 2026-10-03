@@ -202,7 +202,7 @@ final class StampCatalogCommandTest extends KernelTestCase
 
     private function tester(string $name): CommandTester
     {
-        $application = new Application(self::$kernel);
+        $application = new Application(self::$kernel ?? self::bootKernel());
         $application->setAutoExit(false);
 
         return new CommandTester($application->find($name));
