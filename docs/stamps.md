@@ -76,7 +76,7 @@ php bin/console app:stamps:geocode --delay=100      # ms between API calls
 Rows are streamed with Doctrine `toIterable()`, flushed in batches, and the
 entity manager is cleared periodically to keep memory bounded. Failed lookups
 leave coords null so a later run can retry. Client:
-`App\Service\Stamp\GoogleGeocoder` (Symfony HttpClient).
+`App\Service\Stamp\GeocoderInterface` → `GoogleGeocoder` (Symfony HttpClient).
 
 Same `stamps-catalog` lock as import — do not run import and geocode at once.
 
@@ -95,7 +95,8 @@ All `/api/*` routes need `Authorization: Bearer <jwt>` except auth/docs paths
 | `GET` | `/api/stamp_places/{id}` | — |
 
 No Post/Put/Patch/Delete. Lat/lng are included when set. Place `catalogKey` is
-not exposed.
+not exposed. Serialization uses groups (`stamp:read`, `stamp_tag:read`,
+`stamp_place:read`) so new entity fields stay private until opted in.
 
 ```http
 GET /api/stamps?country=CZ&type=regular&order[number]=asc

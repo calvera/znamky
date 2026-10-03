@@ -17,7 +17,7 @@ final class StampGeocodeService
         private readonly EntityManagerInterface $entityManager,
         private readonly StampRepository $stampRepository,
         private readonly StampPlaceRepository $stampPlaceRepository,
-        private readonly GoogleGeocoder $googleGeocoder,
+        private readonly GeocoderInterface $geocoder,
     ) {
     }
 
@@ -36,7 +36,7 @@ final class StampGeocodeService
                 continue;
             }
 
-            $coords = $this->googleGeocoder->geocode($query);
+            $coords = $this->geocoder->geocode($query);
             if (null === $coords) {
                 ++$stats['failed'];
                 $onProgress && $onProgress('stamp', $stamp->getId(), false);
@@ -77,7 +77,7 @@ final class StampGeocodeService
                 continue;
             }
 
-            $coords = $this->googleGeocoder->geocode($query);
+            $coords = $this->geocoder->geocode($query);
             if (null === $coords) {
                 ++$stats['failed'];
                 $onProgress && $onProgress('place', $place->getId(), false);

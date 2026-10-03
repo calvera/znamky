@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Service\Stamp;
 
+use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
-final class GoogleGeocoder
+#[AsAlias(GeocoderInterface::class)]
+final class GoogleGeocoder implements GeocoderInterface
 {
     private const ENDPOINT = 'https://maps.googleapis.com/maps/api/geocode/json';
 
@@ -18,9 +20,6 @@ final class GoogleGeocoder
     ) {
     }
 
-    /**
-     * @return array{lat: float, lng: float}|null
-     */
     public function geocode(string $address): ?array
     {
         $address = trim($address);

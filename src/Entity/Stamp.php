@@ -16,6 +16,7 @@ use App\Repository\StampRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Validator\Constraints as Assert;
 
 #[ORM\Entity(repositoryClass: StampRepository::class)]
@@ -26,6 +27,7 @@ use Symfony\Component\Validator\Constraints as Assert;
         new Get(),
         new GetCollection(),
     ],
+    normalizationContext: ['groups' => ['stamp:read']],
 )]
 #[ApiFilter(SearchFilter::class, properties: [
     'name' => 'partial',
@@ -39,32 +41,41 @@ class Stamp
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
+    #[Groups(['stamp:read'])]
     private ?int $id = null;
 
     #[ORM\Column]
     #[Assert\Positive]
+    #[Groups(['stamp:read'])]
     private int $number = 0;
 
     #[ORM\Column(length: 255)]
     #[Assert\NotBlank]
+    #[Groups(['stamp:read'])]
     private string $name = '';
 
     #[ORM\Column(length: 2, enumType: StampCountry::class)]
+    #[Groups(['stamp:read'])]
     private StampCountry $country = StampCountry::Cz;
 
     #[ORM\Column(length: 16, enumType: StampType::class)]
+    #[Groups(['stamp:read'])]
     private StampType $type = StampType::Regular;
 
     #[ORM\Column(length: 120, nullable: true)]
+    #[Groups(['stamp:read'])]
     private ?string $district = null;
 
     #[ORM\Column(length: 120, nullable: true)]
+    #[Groups(['stamp:read'])]
     private ?string $region = null;
 
     #[ORM\Column(nullable: true)]
+    #[Groups(['stamp:read'])]
     private ?float $latitude = null;
 
     #[ORM\Column(nullable: true)]
+    #[Groups(['stamp:read'])]
     private ?float $longitude = null;
 
     /**
@@ -72,6 +83,7 @@ class Stamp
      */
     #[ORM\ManyToMany(targetEntity: StampTag::class)]
     #[ORM\JoinTable(name: 'stamp_stamp_tag')]
+    #[Groups(['stamp:read'])]
     private Collection $tags;
 
     /**
@@ -79,6 +91,7 @@ class Stamp
      */
     #[ORM\ManyToMany(targetEntity: StampPlace::class)]
     #[ORM\JoinTable(name: 'stamp_stamp_place')]
+    #[Groups(['stamp:read'])]
     private Collection $places;
 
     public function __construct()

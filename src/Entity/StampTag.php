@@ -11,6 +11,7 @@ use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use App\Repository\StampTagRepository;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Validator\Constraints as Assert;
 
 #[ORM\Entity(repositoryClass: StampTagRepository::class)]
@@ -22,6 +23,7 @@ use Symfony\Component\Validator\Constraints as Assert;
         new Get(),
         new GetCollection(),
     ],
+    normalizationContext: ['groups' => ['stamp_tag:read']],
 )]
 #[ApiFilter(SearchFilter::class, properties: [
     'name' => 'partial',
@@ -32,14 +34,17 @@ class StampTag
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
+    #[Groups(['stamp_tag:read', 'stamp:read'])]
     private ?int $id = null;
 
     #[ORM\Column(length: 120)]
     #[Assert\NotBlank]
+    #[Groups(['stamp_tag:read', 'stamp:read'])]
     private string $name = '';
 
     #[ORM\Column(length: 140)]
     #[Assert\NotBlank]
+    #[Groups(['stamp_tag:read', 'stamp:read'])]
     private string $slug = '';
 
     public function getId(): ?int

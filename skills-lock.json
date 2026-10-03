@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "skills": {
+    "api-platform-security": {
+      "source": "dev-toolings/superpowers-symfony",
+      "sourceType": "github",
+      "skillPath": "content/skills/api-platform-security/SKILL.md",
+      "computedHash": "0eb5522a9b677d1493b2986112a7decf521ebcd999665b463846f86d6fe432c0"
+    },
+    "doctrine-migrations": {
+      "source": "dev-toolings/superpowers-symfony",
+      "sourceType": "github",
+      "skillPath": "content/skills/doctrine-migrations/SKILL.md",
+      "computedHash": "c99ce479a619c3de4d8533da6b80daa47edfbb086dd6e9e84650a13e1e653f93"
+    },
+    "functional-tests": {
+      "source": "dev-toolings/superpowers-symfony",
+      "sourceType": "github",
+      "skillPath": "content/skills/functional-tests/SKILL.md",
+      "computedHash": "8f370b203e365298bbde57e7781d4319102dbce6e91661749b0a777d31e2803f"
+    },
+    "interfaces-and-autowiring": {
+      "source": "dev-toolings/superpowers-symfony",
+      "sourceType": "github",
+      "skillPath": "content/skills/interfaces-and-autowiring/SKILL.md",
+      "computedHash": "be8a54684c3a3de92433bad04bb87495bff6c166c7c425ccefb1ac98bf803e9c"
+    },
+    "quality-checks": {
+      "source": "dev-toolings/superpowers-symfony",
+      "sourceType": "github",
+      "skillPath": "content/skills/quality-checks/SKILL.md",
+      "computedHash": "a835315f6caa371487933ba17d8b9d82dec92941c05bb8a53eb2215e0f501431"
+    },
+    "tdd-with-phpunit": {
+      "source": "dev-toolings/superpowers-symfony",
+      "sourceType": "github",
+      "skillPath": "content/skills/tdd-with-phpunit/SKILL.md",
+      "computedHash": "c5c19e8dd81c299405dae57045912e1aa08ea267d56fc3969c203ad5bf90c64e"
+    }
+  }
+}

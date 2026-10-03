@@ -12,6 +12,7 @@ use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use App\Repository\StampPlaceRepository;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Validator\Constraints as Assert;
 
 #[ORM\Entity(repositoryClass: StampPlaceRepository::class)]
@@ -22,6 +23,7 @@ use Symfony\Component\Validator\Constraints as Assert;
         new Get(),
         new GetCollection(),
     ],
+    normalizationContext: ['groups' => ['stamp_place:read']],
 )]
 #[ApiFilter(SearchFilter::class, properties: [
     'name' => 'partial',
@@ -31,16 +33,19 @@ class StampPlace
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
+    #[Groups(['stamp_place:read', 'stamp:read'])]
     private ?int $id = null;
 
     #[ORM\Column(type: 'text')]
     #[Assert\NotBlank]
+    #[Groups(['stamp_place:read', 'stamp:read'])]
     private string $name = '';
 
     /**
      * Empty string when the CSV line has no web URL (keeps the catalog key stable).
      */
     #[ORM\Column(type: 'text')]
+    #[Groups(['stamp_place:read', 'stamp:read'])]
     private string $url = '';
 
     /**
@@ -51,9 +56,11 @@ class StampPlace
     private string $catalogKey = '';
 
     #[ORM\Column(nullable: true)]
+    #[Groups(['stamp_place:read', 'stamp:read'])]
     private ?float $latitude = null;
 
     #[ORM\Column(nullable: true)]
+    #[Groups(['stamp_place:read', 'stamp:read'])]
     private ?float $longitude = null;
 
     public function getId(): ?int
