@@ -39,9 +39,24 @@ final class GeocodeStampsCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $io = new SymfonyStyle($input, $output);
-        $only = (string) $input->getOption('only');
-        $force = (bool) $input->getOption('force');
-        $delayMs = max(0, (int) $input->getOption('delay'));
+
+        $onlyOption = $input->getOption('only');
+        if (!\is_string($onlyOption)) {
+            $io->error('--only must be a string');
+
+            return Command::FAILURE;
+        }
+
+        $delayOption = $input->getOption('delay');
+        if (!\is_int($delayOption) && !(\is_string($delayOption) && is_numeric($delayOption))) {
+            $io->error('--delay must be an integer');
+
+            return Command::FAILURE;
+        }
+
+        $only = $onlyOption;
+        $force = true === $input->getOption('force');
+        $delayMs = max(0, (int) $delayOption);
 
         if (!\in_array($only, ['stamps', 'places', 'all'], true)) {
             $io->error('--only must be one of: stamps, places, all');

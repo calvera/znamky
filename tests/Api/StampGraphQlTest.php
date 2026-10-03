@@ -18,6 +18,7 @@ use Symfony\Component\HttpFoundation\Response;
 final class StampGraphQlTest extends WebTestCase
 {
     use EmailTokenTestTrait;
+    use JsonResponseTestTrait;
     use MailerAssertionsTrait;
     use RateLimiterTestTrait;
 
@@ -62,10 +63,20 @@ final class StampGraphQlTest extends WebTestCase
 
         self::assertResponseIsSuccessful();
         self::assertArrayNotHasKey('errors', $payload);
-        $edges = $payload['data']['stamps']['edges'] ?? [];
+        $data = $this->stringKeyedArray($payload['data'] ?? null, 'GraphQL data');
+        $stamps = $this->stringKeyedArray($data['stamps'] ?? null, 'GraphQL stamps');
+        $edges = $stamps['edges'] ?? null;
+        if (!\is_array($edges)) {
+            self::fail('Expected GraphQL stamp edges array.');
+        }
         self::assertCount(1, $edges);
-        self::assertSame('Praděd', $edges[0]['node']['name'] ?? null);
-        self::assertSame(1, $edges[0]['node']['number'] ?? null);
+        $firstEdge = $edges[0] ?? null;
+        if (!\is_array($firstEdge)) {
+            self::fail('Expected first GraphQL edge to be an array.');
+        }
+        $node = $this->stringKeyedArray($firstEdge['node'] ?? null, 'GraphQL stamp node');
+        self::assertSame('Praděd', $node['name'] ?? null);
+        self::assertSame(1, $node['number'] ?? null);
 
         $schema = $this->graphql(<<<'GRAPHQL'
             {
@@ -81,7 +92,13 @@ final class StampGraphQlTest extends WebTestCase
 
         self::assertResponseIsSuccessful();
         self::assertArrayNotHasKey('errors', $schema);
-        $mutationFields = $schema['data']['__schema']['mutationType']['fields'] ?? null;
+        $schemaData = $this->stringKeyedArray($schema['data'] ?? null, 'GraphQL schema data');
+        $schemaRoot = $this->stringKeyedArray($schemaData['__schema'] ?? null, 'GraphQL __schema');
+        $mutationType = $schemaRoot['mutationType'] ?? null;
+        $mutationFields = null;
+        if (\is_array($mutationType)) {
+            $mutationFields = $mutationType['fields'] ?? null;
+        }
         self::assertTrue(
             null === $mutationFields || [] === $mutationFields,
             'Stamp catalog must not expose GraphQL mutations',
@@ -105,9 +122,7 @@ final class StampGraphQlTest extends WebTestCase
             content: json_encode(['query' => $query], \JSON_THROW_ON_ERROR),
         );
 
-        $content = $this->client->getResponse()->getContent() ?: '{}';
-
-        return json_decode($content, true, 512, \JSON_THROW_ON_ERROR);
+        return $this->jsonResponse();
     }
 
     private function authenticate(): string
@@ -134,10 +149,13 @@ final class StampGraphQlTest extends WebTestCase
         ]);
         self::assertResponseIsSuccessful();
 
-        /** @var array{token: string} $tokens */
-        $tokens = json_decode($this->client->getResponse()->getContent() ?: '[]', true, 512, \JSON_THROW_ON_ERROR);
+        $tokens = $this->jsonResponse();
+        $token = $tokens['token'] ?? null;
+        if (!\is_string($token)) {
+            self::fail('Expected login response with token string.');
+        }
 
-        return $tokens['token'];
+        return $token;
     }
 
     /**

@@ -14,6 +14,7 @@ use Symfony\Component\HttpFoundation\Response;
 final class AuthTest extends WebTestCase
 {
     use EmailTokenTestTrait;
+    use JsonResponseTestTrait;
     use MailerAssertionsTrait;
     use RateLimiterTestTrait;
 
@@ -59,9 +60,13 @@ final class AuthTest extends WebTestCase
             'HTTP_AUTHORIZATION' => 'Bearer '.$tokens['token'],
         ]);
         self::assertResponseIsSuccessful();
-        $me = json_decode($this->client->getResponse()->getContent() ?: '[]', true, 512, \JSON_THROW_ON_ERROR);
+        $me = $this->jsonResponse();
         self::assertSame($email, $me['email']);
-        self::assertContains('ROLE_USER', $me['roles']);
+        $roles = $me['roles'] ?? null;
+        if (!\is_array($roles)) {
+            self::fail('Expected roles array.');
+        }
+        self::assertContains('ROLE_USER', $roles);
     }
 
     public function testLoginAcceptsEmailCasingUsedAtRegistration(): void
@@ -77,7 +82,7 @@ final class AuthTest extends WebTestCase
             'HTTP_AUTHORIZATION' => 'Bearer '.$tokens['token'],
         ]);
         self::assertResponseIsSuccessful();
-        $me = json_decode($this->client->getResponse()->getContent() ?: '[]', true, 512, \JSON_THROW_ON_ERROR);
+        $me = $this->jsonResponse();
         self::assertSame(strtolower($email), $me['email']);
 
         $this->login(strtolower($email), $password);
@@ -107,13 +112,19 @@ final class AuthTest extends WebTestCase
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
 
-        $body = json_decode($this->client->getResponse()->getContent() ?: '[]', true, 512, \JSON_THROW_ON_ERROR);
+        $body = $this->jsonResponse();
         self::assertSame('Validation Failed', $body['title'] ?? null);
         self::assertSame('The given data failed validation.', $body['detail'] ?? null);
-        self::assertIsArray($body['violations'] ?? null);
-        self::assertNotEmpty($body['violations']);
-        self::assertArrayHasKey('propertyPath', $body['violations'][0]);
-        self::assertArrayHasKey('message', $body['violations'][0]);
+        $violations = $body['violations'] ?? null;
+        if (!\is_array($violations) || [] === $violations) {
+            self::fail('Expected non-empty violations array.');
+        }
+        $firstViolation = $violations[0] ?? null;
+        if (!\is_array($firstViolation)) {
+            self::fail('Expected first violation to be an array.');
+        }
+        self::assertArrayHasKey('propertyPath', $firstViolation);
+        self::assertArrayHasKey('message', $firstViolation);
     }
 
     public function testRefreshRotatesToken(): void
@@ -127,7 +138,7 @@ final class AuthTest extends WebTestCase
             'refresh_token' => $tokens['refresh_token'],
         ]);
         self::assertResponseIsSuccessful();
-        $newTokens = json_decode($this->client->getResponse()->getContent() ?: '[]', true, 512, \JSON_THROW_ON_ERROR);
+        $newTokens = $this->jsonResponse();
         self::assertNotSame($tokens['refresh_token'], $newTokens['refresh_token']);
         self::assertNotEmpty($newTokens['token']);
 
@@ -278,7 +289,7 @@ final class AuthTest extends WebTestCase
             'password' => 'password123',
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
-        $created = json_decode($this->client->getResponse()->getContent() ?: '[]', true, 512, \JSON_THROW_ON_ERROR);
+        $created = $this->jsonResponse();
         self::assertSame('user@example.com', $created['email'] ?? null);
         $token = $this->extractTokenFromLastEmail();
 
@@ -299,7 +310,7 @@ final class AuthTest extends WebTestCase
             'HTTP_AUTHORIZATION' => 'Bearer '.$tokens['token'],
         ]);
         self::assertResponseIsSuccessful();
-        $me = json_decode($this->client->getResponse()->getContent() ?: '[]', true, 512, \JSON_THROW_ON_ERROR);
+        $me = $this->jsonResponse();
         self::assertSame('user@example.com', $me['email']);
     }
 
@@ -524,8 +535,12 @@ final class AuthTest extends WebTestCase
             'password' => 'short',
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
-        $body = json_decode($this->client->getResponse()->getContent() ?: '[]', true, 512, \JSON_THROW_ON_ERROR);
-        $paths = array_column($body['violations'] ?? [], 'propertyPath');
+        $body = $this->jsonResponse();
+        $violations = $body['violations'] ?? null;
+        if (!\is_array($violations)) {
+            self::fail('Expected violations array.');
+        }
+        $paths = array_column($violations, 'propertyPath');
         self::assertContains('password', $paths);
 
         $this->login($email, $oldPassword);
@@ -687,8 +702,12 @@ final class AuthTest extends WebTestCase
             'password' => 'short',
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
-        $body = json_decode($this->client->getResponse()->getContent() ?: '[]', true, 512, \JSON_THROW_ON_ERROR);
-        $paths = array_column($body['violations'] ?? [], 'propertyPath');
+        $body = $this->jsonResponse();
+        $violations = $body['violations'] ?? null;
+        if (!\is_array($violations)) {
+            self::fail('Expected violations array.');
+        }
+        $paths = array_column($violations, 'propertyPath');
         self::assertContains('password', $paths);
 
         $this->jsonRequest('POST', '/api/login', [
@@ -837,10 +856,14 @@ final class AuthTest extends WebTestCase
         ]);
         self::assertResponseIsSuccessful();
 
-        /** @var array{token: string, refresh_token: string} $tokens */
-        $tokens = json_decode($this->client->getResponse()->getContent() ?: '[]', true, 512, \JSON_THROW_ON_ERROR);
+        $tokens = $this->jsonResponse();
+        $token = $tokens['token'] ?? null;
+        $refreshToken = $tokens['refresh_token'] ?? null;
+        if (!\is_string($token) || !\is_string($refreshToken)) {
+            self::fail('Expected login response with token and refresh_token strings.');
+        }
 
-        return $tokens;
+        return ['token' => $token, 'refresh_token' => $refreshToken];
     }
 
     private function registerAndVerify(string $email, string $password): void

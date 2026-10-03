@@ -18,6 +18,7 @@ use Symfony\Component\HttpFoundation\Response;
 final class StampCatalogTest extends WebTestCase
 {
     use EmailTokenTestTrait;
+    use JsonResponseTestTrait;
     use MailerAssertionsTrait;
     use RateLimiterTestTrait;
 
@@ -52,8 +53,7 @@ final class StampCatalogTest extends WebTestCase
             'HTTP_ACCEPT' => 'application/ld+json',
         ]);
         self::assertResponseIsSuccessful();
-        $payload = json_decode($this->client->getResponse()->getContent() ?: '[]', true, 512, \JSON_THROW_ON_ERROR);
-        $members = $payload['member'] ?? $payload['hydra:member'] ?? [];
+        $members = $this->members();
         self::assertCount(2, $members);
 
         $this->client->request('GET', '/api/stamps?country=CZ&type=regular', server: [
@@ -61,8 +61,7 @@ final class StampCatalogTest extends WebTestCase
             'HTTP_ACCEPT' => 'application/ld+json',
         ]);
         self::assertResponseIsSuccessful();
-        $filtered = json_decode($this->client->getResponse()->getContent() ?: '[]', true, 512, \JSON_THROW_ON_ERROR);
-        $filteredMembers = $filtered['member'] ?? $filtered['hydra:member'] ?? [];
+        $filteredMembers = $this->members();
         self::assertCount(1, $filteredMembers);
         self::assertSame('Praděd', $filteredMembers[0]['name'] ?? null);
     }
@@ -76,8 +75,7 @@ final class StampCatalogTest extends WebTestCase
             'HTTP_ACCEPT' => 'application/ld+json',
         ]);
         self::assertResponseIsSuccessful();
-        $tags = json_decode($this->client->getResponse()->getContent() ?: '[]', true, 512, \JSON_THROW_ON_ERROR);
-        $tagMembers = $tags['member'] ?? $tags['hydra:member'] ?? [];
+        $tagMembers = $this->members();
         self::assertNotEmpty($tagMembers);
         self::assertSame('Hory', $tagMembers[0]['name'] ?? null);
 
@@ -86,8 +84,7 @@ final class StampCatalogTest extends WebTestCase
             'HTTP_ACCEPT' => 'application/ld+json',
         ]);
         self::assertResponseIsSuccessful();
-        $places = json_decode($this->client->getResponse()->getContent() ?: '[]', true, 512, \JSON_THROW_ON_ERROR);
-        $placeMembers = $places['member'] ?? $places['hydra:member'] ?? [];
+        $placeMembers = $this->members();
         self::assertNotEmpty($placeMembers);
         self::assertSame('Chatová služba', $placeMembers[0]['name'] ?? null);
         self::assertArrayNotHasKey('catalogKey', $placeMembers[0]);
@@ -137,7 +134,7 @@ final class StampCatalogTest extends WebTestCase
         self::assertIsString($path);
         $this->client->request('GET', $path, server: $headers);
         self::assertResponseIsSuccessful();
-        $item = json_decode($this->client->getResponse()->getContent() ?: '[]', true, 512, \JSON_THROW_ON_ERROR);
+        $item = $this->jsonResponse();
         self::assertSame('Praděd výroční', $item['name'] ?? null);
         self::assertSame('annual', $item['type'] ?? null);
         self::assertSame('CZ', $item['country'] ?? null);
@@ -162,7 +159,7 @@ final class StampCatalogTest extends WebTestCase
 
         $this->client->request('GET', $path, server: $headers);
         self::assertResponseIsSuccessful();
-        self::assertSame('Praděd výroční', $this->json()['name'] ?? null);
+        self::assertSame('Praděd výroční', $this->jsonResponse()['name'] ?? null);
     }
 
     private function authenticate(): string
@@ -189,21 +186,13 @@ final class StampCatalogTest extends WebTestCase
         ]);
         self::assertResponseIsSuccessful();
 
-        /** @var array{token: string} $tokens */
-        $tokens = json_decode($this->client->getResponse()->getContent() ?: '[]', true, 512, \JSON_THROW_ON_ERROR);
+        $tokens = $this->jsonResponse();
+        $token = $tokens['token'] ?? null;
+        if (!\is_string($token)) {
+            self::fail('Expected login response with token string.');
+        }
 
-        return $tokens['token'];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function json(): array
-    {
-        /** @var array<string, mixed> $payload */
-        $payload = json_decode($this->client->getResponse()->getContent() ?: '[]', true, 512, \JSON_THROW_ON_ERROR);
-
-        return $payload;
+        return $token;
     }
 
     /**
@@ -211,7 +200,7 @@ final class StampCatalogTest extends WebTestCase
      */
     private function members(): array
     {
-        $payload = $this->json();
+        $payload = $this->jsonResponse();
         $raw = $payload['member'] ?? $payload['hydra:member'] ?? null;
         if (!\is_array($raw)) {
             self::fail('Expected member collection to be an array.');

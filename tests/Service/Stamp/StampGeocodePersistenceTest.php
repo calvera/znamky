@@ -260,7 +260,14 @@ final class StampGeocodePersistenceTest extends KernelTestCase
     private function replaceGeocoder(array &$calls): void
     {
         $client = new MockHttpClient(function (string $method, string $url, array $options) use (&$calls): MockResponse {
-            $address = (string) $options['query']['address'];
+            $query = $options['query'] ?? null;
+            if (!\is_array($query)) {
+                self::fail('Expected query options array.');
+            }
+            $address = $query['address'] ?? null;
+            if (!\is_string($address)) {
+                self::fail('Expected address query string.');
+            }
             $calls[] = $address;
 
             if (str_contains($address, 'Missing Peak')) {

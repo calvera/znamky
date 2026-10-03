@@ -16,8 +16,12 @@ final class GoogleGeocoderTest extends TestCase
         $client = new MockHttpClient(function (string $method, string $url, array $options): MockResponse {
             self::assertSame('GET', $method);
             self::assertStringContainsString('maps.googleapis.com/maps/api/geocode/json', $url);
-            self::assertSame('Praděd, Moravskoslezský kraj, Czech Republic', $options['query']['address']);
-            self::assertSame('test-key', $options['query']['key']);
+            $query = $options['query'] ?? null;
+            if (!\is_array($query)) {
+                self::fail('Expected query options array.');
+            }
+            self::assertSame('Praděd, Moravskoslezský kraj, Czech Republic', $query['address'] ?? null);
+            self::assertSame('test-key', $query['key'] ?? null);
 
             return new MockResponse(json_encode([
                 'status' => 'OK',

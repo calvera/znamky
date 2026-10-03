@@ -53,12 +53,19 @@ final class ImportStampsCommand extends Command
         }
 
         try {
-            $path = (string) $input->getOption('path');
+            $pathOption = $input->getOption('path');
+            if (!\is_string($pathOption)) {
+                $io->error('--path must be a string');
+
+                return Command::FAILURE;
+            }
+
+            $path = $pathOption;
             if (!str_starts_with($path, '/')) {
                 $path = $this->projectDir.\DIRECTORY_SEPARATOR.$path;
             }
 
-            $purge = (bool) $input->getOption('purge');
+            $purge = true === $input->getOption('purge');
             if ($purge) {
                 $io->warning('Purging existing stamp catalog before import.');
             }
