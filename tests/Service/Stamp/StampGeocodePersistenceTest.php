@@ -173,6 +173,51 @@ final class StampGeocodePersistenceTest extends KernelTestCase
         self::assertSame(17.5, $place->getLongitude());
     }
 
+    public function testGeocodePersistsRowsPastTheBatchFlush(): void
+    {
+        $total = 51;
+
+        for ($number = 1; $number <= $total; ++$number) {
+            $this->em->persist((new Stamp())
+                ->setCountry(StampCountry::Cz)
+                ->setType(StampType::Regular)
+                ->setNumber($number)
+                ->setName('Vrchol '.$number)
+                ->setRegion('Moravskoslezský kraj'));
+            $this->em->persist((new StampPlace())->setName('Místo '.$number));
+        }
+        $this->em->flush();
+        $this->em->clear();
+
+        $calls = [];
+        $this->replaceGeocoder($calls);
+
+        /** @var StampGeocodeService $service */
+        $service = static::getContainer()->get(StampGeocodeService::class);
+
+        self::assertSame(
+            ['geocoded' => $total, 'skipped' => 0, 'failed' => 0],
+            $service->geocodeStamps(false),
+        );
+        self::assertSame(
+            ['geocoded' => $total, 'skipped' => 0, 'failed' => 0],
+            $service->geocodePlaces(false),
+        );
+        self::assertCount($total * 2, $calls);
+
+        for ($number = 1; $number <= $total; ++$number) {
+            $stamp = $this->stamps()->findOneByIdentity(StampCountry::Cz, StampType::Regular, $number);
+            self::assertInstanceOf(Stamp::class, $stamp);
+            self::assertSame(50.5, $stamp->getLatitude());
+            self::assertSame(17.5, $stamp->getLongitude());
+
+            $place = $this->places()->findOneByNameAndUrl('Místo '.$number, null);
+            self::assertInstanceOf(StampPlace::class, $place);
+            self::assertSame(50.5, $place->getLatitude());
+            self::assertSame(17.5, $place->getLongitude());
+        }
+    }
+
     public function testForceGeocodeRewritesExistingCoordinates(): void
     {
         $stamp = (new Stamp())

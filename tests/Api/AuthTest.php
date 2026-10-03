@@ -580,6 +580,161 @@ final class AuthTest extends WebTestCase
         $this->login($email, $newPassword);
     }
 
+    public function testVerifyAfterResetUsesPasswordChosenAtVerification(): void
+    {
+        $email = 'verify-after-reset@example.com';
+        $registrationPassword = 'password123';
+        $resetPassword = 'resetpassword1';
+        $verificationPassword = 'chosen-by-inbox';
+
+        $this->jsonRequest('POST', '/api/register', [
+            'email' => $email,
+            'password' => $registrationPassword,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
+        $verificationToken = $this->extractTokenFromLastEmail();
+
+        $this->jsonRequest('POST', '/api/forgot-password', ['email' => $email]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+        $resetToken = $this->extractTokenFromLastEmail();
+
+        $this->jsonRequest('POST', '/api/reset-password', [
+            'token' => $resetToken,
+            'password' => $resetPassword,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+
+        $this->jsonRequest('POST', '/api/login', [
+            'email' => $email,
+            'password' => $resetPassword,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+
+        $this->jsonRequest('POST', '/api/verify-email', [
+            'token' => $verificationToken,
+            'password' => $verificationPassword,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+
+        $this->jsonRequest('POST', '/api/login', [
+            'email' => $email,
+            'password' => $resetPassword,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+
+        $this->jsonRequest('POST', '/api/login', [
+            'email' => $email,
+            'password' => $registrationPassword,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+
+        $this->login($email, $verificationPassword);
+    }
+
+    public function testPasswordResetRevokesEveryRefreshSessionButNotOtherAccounts(): void
+    {
+        $email = 'reset-sessions@example.com';
+        $this->registerAndVerify($email, 'password123');
+        $first = $this->login($email, 'password123');
+        $second = $this->login($email, 'password123');
+
+        $this->registerAndVerify('bystander@example.com', 'password123');
+        $bystander = $this->login('bystander@example.com', 'password123');
+
+        $this->jsonRequest('POST', '/api/forgot-password', ['email' => $email]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+
+        $this->jsonRequest('POST', '/api/reset-password', [
+            'token' => $this->extractTokenFromLastEmail(),
+            'password' => 'newpassword456',
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+
+        $this->jsonRequest('POST', '/api/token/refresh', [
+            'refresh_token' => $first['refresh_token'],
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+
+        $this->jsonRequest('POST', '/api/token/refresh', [
+            'refresh_token' => $second['refresh_token'],
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+
+        $this->jsonRequest('POST', '/api/token/refresh', [
+            'refresh_token' => $bystander['refresh_token'],
+        ]);
+        self::assertResponseIsSuccessful();
+
+        $this->login($email, 'newpassword456');
+    }
+
+    public function testShortVerificationPasswordDoesNotConsumeTheToken(): void
+    {
+        $email = 'short-verify@example.com';
+        $password = 'password123';
+        $this->jsonRequest('POST', '/api/register', [
+            'email' => $email,
+            'password' => $password,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
+        $token = $this->extractTokenFromLastEmail();
+
+        $this->jsonRequest('POST', '/api/verify-email', [
+            'token' => $token,
+            'password' => 'short',
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
+        $body = json_decode($this->client->getResponse()->getContent() ?: '[]', true, 512, \JSON_THROW_ON_ERROR);
+        $paths = array_column($body['violations'] ?? [], 'propertyPath');
+        self::assertContains('password', $paths);
+
+        $this->jsonRequest('POST', '/api/login', [
+            'email' => $email,
+            'password' => $password,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+
+        $this->jsonRequest('POST', '/api/verify-email', [
+            'token' => $token,
+            'password' => $password,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+        $this->login($email, $password);
+    }
+
+    public function testIssuedAuthTokensExpireOnTheirExpectedWindows(): void
+    {
+        $email = 'token-lifetime@example.com';
+        $registeredAt = new \DateTimeImmutable();
+        $this->jsonRequest('POST', '/api/register', [
+            'email' => $email,
+            'password' => 'password123',
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
+
+        $verificationExpires = $this->findUser($email)->getEmailVerificationTokenExpiresAt();
+        self::assertInstanceOf(\DateTimeImmutable::class, $verificationExpires);
+        self::assertGreaterThan($registeredAt->modify('+23 hours'), $verificationExpires);
+        self::assertLessThan($registeredAt->modify('+25 hours'), $verificationExpires);
+
+        $this->jsonRequest('POST', '/api/verify-email', [
+            'token' => $this->extractTokenFromLastEmail(),
+            'password' => 'password123',
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+
+        $requestedAt = new \DateTimeImmutable();
+        $this->jsonRequest('POST', '/api/forgot-password', ['email' => $email]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+
+        $user = $this->findUser($email);
+        $resetExpires = $user->getPasswordResetTokenExpiresAt();
+        self::assertInstanceOf(\DateTimeImmutable::class, $resetExpires);
+        self::assertGreaterThan($requestedAt->modify('+50 minutes'), $resetExpires);
+        self::assertLessThan($requestedAt->modify('+70 minutes'), $resetExpires);
+        self::assertNull($user->getEmailVerificationToken());
+    }
+
     public function testLogoutWithEmptyRefreshTokenRevokesEverySession(): void
     {
         $email = 'logout-empty@example.com';
@@ -716,12 +871,21 @@ final class AuthTest extends WebTestCase
         return $matches[1];
     }
 
+    private function findUser(string $email): User
+    {
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $user = $em->getRepository(User::class)->findOneBy(['email' => strtolower($email)]);
+        self::assertInstanceOf(User::class, $user);
+
+        return $user;
+    }
+
     private function expireUserToken(string $email, string $field): void
     {
         /** @var EntityManagerInterface $em */
         $em = static::getContainer()->get('doctrine')->getManager();
-        $user = $em->getRepository(User::class)->findOneBy(['email' => $email]);
-        self::assertInstanceOf(User::class, $user);
+        $user = $this->findUser($email);
 
         if ('emailVerificationTokenExpiresAt' === $field) {
             $user->setEmailVerificationTokenExpiresAt(new \DateTimeImmutable('-1 minute'));

@@ -282,6 +282,51 @@ CSV);
         self::assertNull($stamp->getLongitude());
     }
 
+    public function testSharedCatalogSurvivesTheImportBatchFlush(): void
+    {
+        $lines = [
+            '"Číslo";"Název";"Země";"Typ";"Kategorie";"Okres";"Kraj";"Prodejní místa (název a web)"',
+        ];
+        for ($number = 1; $number <= 101; ++$number) {
+            $lines[] = sprintf(
+                '"%d";"Známka %d";"Česká Republika";"Turistická známka";"Hory";"Bruntál";"Moravskoslezský kraj";"Společné místo (https://example.com/place)"',
+                $number,
+                $number,
+            );
+        }
+        $this->writeCsv('cs-stamps.csv', implode("\n", $lines)."\n");
+
+        $result = $this->importService->import($this->fixtureDir);
+
+        self::assertSame(101, $result['stamps']);
+        self::assertSame(1, $result['tags']);
+        self::assertSame(1, $result['places']);
+
+        $first = $this->stampRepository->findOneByIdentity(StampCountry::Cz, StampType::Regular, 1);
+        $atFlush = $this->stampRepository->findOneByIdentity(StampCountry::Cz, StampType::Regular, 100);
+        $afterFlush = $this->stampRepository->findOneByIdentity(StampCountry::Cz, StampType::Regular, 101);
+        self::assertInstanceOf(Stamp::class, $first);
+        self::assertInstanceOf(Stamp::class, $atFlush);
+        self::assertInstanceOf(Stamp::class, $afterFlush);
+
+        $place = $first->getPlaces()->first();
+        $tag = $first->getTags()->first();
+        self::assertInstanceOf(StampPlace::class, $place);
+        self::assertInstanceOf(StampTag::class, $tag);
+        self::assertSame('Společné místo', $place->getName());
+        self::assertSame('https://example.com/place', $place->getUrl());
+        self::assertSame('hory', $tag->getSlug());
+
+        foreach ([$atFlush, $afterFlush] as $stamp) {
+            $stampPlace = $stamp->getPlaces()->first();
+            $stampTag = $stamp->getTags()->first();
+            self::assertInstanceOf(StampPlace::class, $stampPlace);
+            self::assertInstanceOf(StampTag::class, $stampTag);
+            self::assertSame($place->getId(), $stampPlace->getId());
+            self::assertSame($tag->getId(), $stampTag->getId());
+        }
+    }
+
     public function testReimportReplacesTagsAndPlaces(): void
     {
         $this->importService->import($this->fixtureDir);
