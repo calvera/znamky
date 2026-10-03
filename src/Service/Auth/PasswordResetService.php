@@ -6,6 +6,7 @@ namespace App\Service\Auth;
 
 use App\Repository\UserRepository;
 use App\Security\TokenHasher;
+use Doctrine\ORM\EntityManagerInterface;
 use Gesdinet\JWTRefreshTokenBundle\Model\RevokeRefreshTokenManagerInterface;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
@@ -14,6 +15,7 @@ final class PasswordResetService
 {
     public function __construct(
         private readonly UserRepository $userRepository,
+        private readonly EntityManagerInterface $entityManager,
         private readonly TokenHasher $tokenHasher,
         private readonly AuthMailer $authMailer,
         private readonly UserPasswordHasherInterface $passwordHasher,
@@ -32,8 +34,12 @@ final class PasswordResetService
         $user->setPasswordResetToken($this->tokenHasher->hash($rawToken));
         $user->setPasswordResetTokenExpiresAt(new \DateTimeImmutable('+1 hour'));
 
-        $this->userRepository->save($user);
-        $this->authMailer->sendPasswordReset($user, $rawToken);
+        // Replacing the stored token before the email is accepted burns the
+        // previous link when SMTP fails. Roll that replacement back with the send.
+        $this->entityManager->wrapInTransaction(function () use ($user, $rawToken): void {
+            $this->userRepository->save($user);
+            $this->authMailer->sendPasswordReset($user, $rawToken);
+        });
     }
 
     public function reset(string $rawToken, string $plainPassword): void
