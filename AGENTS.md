@@ -10,8 +10,9 @@ are installed unless those files say so.
 Do not re-ask these. Follow the existing patterns under `src/` and `config/`.
 
 - **Persistence:** Doctrine ORM on PostgreSQL. Schema changes go through migrations.
-- **Interface:** JSON API under `/api` (API Platform + thin controllers). Twig is for email
-  templates only, not server-rendered pages.
+- **Interface:** JSON API under `/api` (API Platform + thin controllers), plus GraphQL at
+  `/api/graphql` (`api-platform/graphql`, GraphiQL at `/api/graphql/graphiql`). Twig is for
+  email templates only, not server-rendered pages.
 - **Auth:** Lexik JWT (`Authorization: Bearer`) with Gesdinet refresh tokens.
   - Login: `POST /api/login` (`email` + `password`) via `json_login`.
   - Refresh: `POST /api/token/refresh`.
@@ -23,7 +24,9 @@ Do not re-ask these. Follow the existing patterns under `src/` and `config/`.
 - **Auth code layout:** Controllers in `src/Controller/Auth/`, DTOs in `src/Dto/Auth/`,
   services in `src/Service/Auth/`. Prefer extending these over inventing parallel stacks.
 - **Stamp catalog:** Read-only API Platform resources (`Stamp`, `StampTag`,
-  `StampPlace`) under `/api/stamps`, `/api/stamp_tags`, `/api/stamp_places`.
+  `StampPlace`) under `/api/stamps`, `/api/stamp_tags`, `/api/stamp_places`, and
+  matching GraphQL queries (`graphQlOperations`: `Query` + `QueryCollection` only —
+  no mutations).
   - Identity: stamp `(country, type, number)`; country `CZ`/`SK`, type
     `regular`/`annual` (`App\Enum\StampCountry`, `App\Enum\StampType`).
   - Tags and places are shared catalogs (M2M from Stamp). Places dedupe by

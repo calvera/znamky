@@ -32,6 +32,7 @@ them) — including `APP_SECRET`, `JWT_PASSPHRASE`, and `GOOGLE_MAPS_API_KEY`.
 | [docs/stamps.md](docs/stamps.md) | Stamp catalog, CSV import, geocoding, read-only API |
 | [docs/openapi.yaml](docs/openapi.yaml) | OpenAPI 3 spec (auth + stamp resources) |
 | `/api/docs` | Interactive Swagger UI |
+| `/api/graphql` | GraphQL endpoint (JWT); IDE at `/api/graphql/graphiql` |
 
 Export the live OpenAPI document anytime:
 
@@ -58,6 +59,7 @@ See [docs/auth.md](docs/auth.md).
 2. Optional geocode (needs `GOOGLE_MAPS_API_KEY` in `.env.local`):
    `php bin/console app:stamps:geocode`
 3. Read-only API (JWT): `GET /api/stamps`, `/api/stamp_tags`, `/api/stamp_places`
+   (same catalog via GraphQL: `POST /api/graphql`)
 
 Import and geocode take a shared lock (`stamps-catalog`) so they cannot run
 concurrently. See [docs/stamps.md](docs/stamps.md) for filters, CSV layout, and
@@ -71,7 +73,7 @@ php bin/phpunit
 
 ## Stack
 
-- Symfony 8.1, API Platform 5, Doctrine ORM, PostgreSQL
+- Symfony 8.1, API Platform 5 (REST + GraphQL), Doctrine ORM, PostgreSQL
 - Lexik JWT + Gesdinet refresh tokens
 - Symfony Mailer (verification & password reset)
 - Stamp catalog import + Google Geocoding (`symfony/http-client`)

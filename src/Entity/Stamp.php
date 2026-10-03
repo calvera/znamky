@@ -10,6 +10,8 @@ use ApiPlatform\Metadata\ApiFilter;
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
+use ApiPlatform\Metadata\GraphQl\Query;
+use ApiPlatform\Metadata\GraphQl\QueryCollection;
 use App\Enum\StampCountry;
 use App\Enum\StampType;
 use App\Repository\StampRepository;
@@ -26,6 +28,10 @@ use Symfony\Component\Validator\Constraints as Assert;
     operations: [
         new Get(),
         new GetCollection(),
+    ],
+    graphQlOperations: [
+        new Query(),
+        new QueryCollection(),
     ],
     normalizationContext: ['groups' => ['stamp:read']],
 )]

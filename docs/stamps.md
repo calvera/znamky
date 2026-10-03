@@ -2,9 +2,10 @@
 
 Catalog of tourist stamps (`Stamp`), tags (`StampTag`), and sales places
 (`StampPlace`). Data is loaded from CSV under `data/`, exposed as read-only API
-Platform resources, and optionally geocoded via Google Maps.
+Platform resources (REST + GraphQL), and optionally geocoded via Google Maps.
 
 Interactive docs: [`/api/docs`](/api/docs). Machine-readable: [`openapi.yaml`](openapi.yaml).
+GraphQL: [`/api/graphql`](/api/graphql), IDE [`/api/graphql/graphiql`](/api/graphql/graphiql).
 
 ## Domain
 
@@ -94,9 +95,10 @@ All `/api/*` routes need `Authorization: Bearer <jwt>` except auth/docs paths
 | `GET` | `/api/stamp_places` | `name` (partial) |
 | `GET` | `/api/stamp_places/{id}` | — |
 
-No Post/Put/Patch/Delete. Lat/lng are included when set. Place `catalogKey` is
-not exposed. Serialization uses groups (`stamp:read`, `stamp_tag:read`,
-`stamp_place:read`) so new entity fields stay private until opted in.
+No Post/Put/Patch/Delete (REST or GraphQL). Lat/lng are included when set. Place
+`catalogKey` is not exposed. Serialization uses groups (`stamp:read`,
+`stamp_tag:read`, `stamp_place:read`) so new entity fields stay private until
+opted in.
 
 ```http
 GET /api/stamps?country=CZ&type=regular&order[number]=asc
@@ -108,13 +110,32 @@ GET /api/stamp_tags?slug=jeseníky
 Authorization: Bearer <jwt>
 ```
 
+### GraphQL (read-only, JWT required)
+
+`POST /api/graphql` with `Authorization: Bearer <jwt>`. GraphiQL UI at
+`/api/graphql/graphiql` is public (paste the Bearer token in the IDE headers).
+Root queries: `stamps`, `stamp`, `stampTags`, `stampTag`, `stampPlaces`,
+`stampPlace`. Filters match the REST SearchFilter/OrderFilter arguments.
+
+```http
+POST /api/graphql
+Authorization: Bearer <jwt>
+Content-Type: application/json
+
+{
+  "query": "{ stamps(country: \"CZ\", type: \"regular\") { edges { node { name number } } } }"
+}
+```
+
 ## Tests
 
 ```bash
 php bin/phpunit tests/Service/Stamp
 php bin/phpunit tests/Api/StampCatalogTest.php
+php bin/phpunit tests/Api/StampGraphQlTest.php
 ```
 
 Service tests cover place/tag parsing, Google geocoder (mocked HTTP), import
 shared-place reuse, and stamp geocode query building. `StampCatalogTest` covers
 JWT gating and collection/filter responses for stamps, tags, and places.
+`StampGraphQlTest` covers GraphQL auth, collection query, and no mutations.

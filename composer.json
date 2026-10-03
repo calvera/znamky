@@ -8,6 +8,7 @@
         "ext-ctype": "*",
         "ext-iconv": "*",
         "api-platform/doctrine-orm": "^5.0",
+        "api-platform/graphql": "^5.0",
         "api-platform/symfony": "^5.0",
         "doctrine/doctrine-bundle": "^3.3",
         "doctrine/doctrine-migrations-bundle": "^4.0",
