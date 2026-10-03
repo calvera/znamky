@@ -22,10 +22,15 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column]
     private ?int $id = null;
 
+    /**
+     * @var non-empty-string
+     *
+     * DBAL maps string columns to string; emptiness is enforced in setEmail().
+     */
     #[ORM\Column(length: 180)]
     #[Assert\NotBlank]
     #[Assert\Email]
-    private string $email = '';
+    private string $email; // @phpstan-ignore doctrine.columnType
 
     /**
      * @var list<string>
@@ -56,6 +61,9 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this->id;
     }
 
+    /**
+     * @return non-empty-string
+     */
     public function getEmail(): string
     {
         return $this->email;
@@ -63,11 +71,19 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 
     public function setEmail(string $email): static
     {
-        $this->email = strtolower($email);
+        $email = strtolower(trim($email));
+        if ('' === $email) {
+            throw new \InvalidArgumentException('Email cannot be empty.');
+        }
+
+        $this->email = $email;
 
         return $this;
     }
 
+    /**
+     * @return non-empty-string
+     */
     public function getUserIdentifier(): string
     {
         return $this->email;

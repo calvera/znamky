@@ -212,10 +212,27 @@ final class StampCatalogTest extends WebTestCase
     private function members(): array
     {
         $payload = $this->json();
-        $members = $payload['member'] ?? $payload['hydra:member'] ?? [];
-        self::assertIsArray($members);
+        $raw = $payload['member'] ?? $payload['hydra:member'] ?? null;
+        if (!\is_array($raw)) {
+            self::fail('Expected member collection to be an array.');
+        }
 
-        /* @var list<array<string, mixed>> $members */
+        $members = [];
+        foreach (array_values($raw) as $item) {
+            if (!\is_array($item)) {
+                self::fail('Expected each member to be an array.');
+            }
+
+            $member = [];
+            foreach ($item as $key => $value) {
+                if (!\is_string($key)) {
+                    self::fail('Expected member keys to be strings.');
+                }
+                $member[$key] = $value;
+            }
+            $members[] = $member;
+        }
+
         return $members;
     }
 

@@ -20,8 +20,9 @@ trait EmailTokenTestTrait
         }
 
         self::assertIsString($body);
-        self::assertMatchesRegularExpression('/([a-f0-9]{64})/', $body);
-        preg_match('/([a-f0-9]{64})/', $body, $matches);
+        if (1 !== preg_match('/([a-f0-9]{64})/', $body, $matches)) {
+            self::fail('Expected a 64-char hex token in the email body.');
+        }
 
         return $matches[1];
     }
