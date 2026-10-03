@@ -136,8 +136,19 @@ Other cases:
 - Duplicate registration email: **422** (same `ValidationFailed` shape when
   thrown from the validator)
 - Invalid/expired verify or reset token: **422**
+- Rate limit exceeded on public auth endpoints: **429** (`Retry-After` header)
 
 Password minimum length is **8** characters.
+
+## Rate limiting
+
+| Endpoint | Limiter | Default |
+|----------|---------|---------|
+| `POST /api/register`, `POST /api/forgot-password` | `auth_email` | 10 / 15 minutes per IP |
+| `POST /api/verify-email`, `POST /api/reset-password` | `auth_token` | 20 / 15 minutes per IP |
+| `POST /api/login` | login throttling (`username+IP` + `IP`) | 5 / 5 minutes per username+IP; 50 / 15 minutes per IP |
+
+Config: `config/packages/rate_limiter.yaml`.
 
 ## Secrets
 

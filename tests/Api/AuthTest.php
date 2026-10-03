@@ -13,7 +13,9 @@ use Symfony\Component\HttpFoundation\Response;
 
 final class AuthTest extends WebTestCase
 {
+    use EmailTokenTestTrait;
     use MailerAssertionsTrait;
+    use RateLimiterTestTrait;
 
     private KernelBrowser $client;
 
@@ -21,6 +23,7 @@ final class AuthTest extends WebTestCase
     {
         $this->client = static::createClient();
         $this->purgeDatabase();
+        $this->clearRateLimiters();
     }
 
     public function testRegisterVerifyLoginAndMe(): void
@@ -855,20 +858,6 @@ final class AuthTest extends WebTestCase
             'password' => $password,
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
-    }
-
-    private function extractTokenFromLastEmail(): string
-    {
-        $email = self::getMailerMessage();
-        self::assertNotNull($email);
-        $body = method_exists($email, 'getHtmlBody') ? ($email->getHtmlBody() ?: '') : (string) $email;
-        if ('' === $body && method_exists($email, 'toString')) {
-            $body = $email->toString();
-        }
-        self::assertMatchesRegularExpression('/([a-f0-9]{64})/', $body);
-        preg_match('/([a-f0-9]{64})/', $body, $matches);
-
-        return $matches[1];
     }
 
     private function findUser(string $email): User

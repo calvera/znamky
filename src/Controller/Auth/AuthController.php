@@ -19,6 +19,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
+use Symfony\Component\HttpKernel\Attribute\RateLimit;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\CurrentUser;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
@@ -26,6 +27,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[Route('/api')]
 final class AuthController extends AbstractController
 {
+    #[RateLimit('auth_email')]
     #[Route('/register', name: 'api_register', methods: ['POST'])]
     public function register(
         #[MapRequestPayload]
@@ -40,6 +42,7 @@ final class AuthController extends AbstractController
         ], Response::HTTP_CREATED);
     }
 
+    #[RateLimit('auth_token')]
     #[Route('/verify-email', name: 'api_verify_email', methods: ['POST'])]
     public function verifyEmail(
         #[MapRequestPayload]
@@ -63,6 +66,7 @@ final class AuthController extends AbstractController
         throw new \LogicException('Token refresh is handled by the security firewall.');
     }
 
+    #[RateLimit('auth_email')]
     #[Route('/forgot-password', name: 'api_forgot_password', methods: ['POST'])]
     public function forgotPassword(
         #[MapRequestPayload]
@@ -74,6 +78,7 @@ final class AuthController extends AbstractController
         return new Response(status: Response::HTTP_NO_CONTENT);
     }
 
+    #[RateLimit('auth_token')]
     #[Route('/reset-password', name: 'api_reset_password', methods: ['POST'])]
     public function resetPassword(
         #[MapRequestPayload]

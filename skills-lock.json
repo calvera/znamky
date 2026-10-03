@@ -1,17 +1,47 @@
 {
   "version": 1,
   "skills": {
+    "analyse-with-phpstan": {
+      "source": "phpstan/phpstan",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/analyse-with-phpstan/SKILL.md",
+      "computedHash": "020158747433affcce17cfeffa43b6340596c01e1dcc6ee1b5cc4e2928abe700"
+    },
+    "api-platform-filters": {
+      "source": "dev-toolings/superpowers-symfony",
+      "sourceType": "github",
+      "skillPath": "content/skills/api-platform-filters/SKILL.md",
+      "computedHash": "d89f39cccf862e3eb555c4e82ece8d5e40824b5efc239115941066197b91439c"
+    },
     "api-platform-security": {
       "source": "dev-toolings/superpowers-symfony",
       "sourceType": "github",
       "skillPath": "content/skills/api-platform-security/SKILL.md",
       "computedHash": "0eb5522a9b677d1493b2986112a7decf521ebcd999665b463846f86d6fe432c0"
     },
+    "api-platform-versioning": {
+      "source": "dev-toolings/superpowers-symfony",
+      "sourceType": "github",
+      "skillPath": "content/skills/api-platform-versioning/SKILL.md",
+      "computedHash": "edf934f5e44b4a382d33731241aaae16a1a7f3dc3a4c4c6feac0c6e461e130f7"
+    },
+    "daily-workflow": {
+      "source": "dev-toolings/superpowers-symfony",
+      "sourceType": "github",
+      "skillPath": "content/skills/daily-workflow/SKILL.md",
+      "computedHash": "94a05916f4cc52ea3cf3b7284791a7791f493f2ff6ff2c56ed0a6b7d38422fa0"
+    },
     "doctrine-migrations": {
       "source": "dev-toolings/superpowers-symfony",
       "sourceType": "github",
       "skillPath": "content/skills/doctrine-migrations/SKILL.md",
       "computedHash": "c99ce479a619c3de4d8533da6b80daa47edfbb086dd6e9e84650a13e1e653f93"
+    },
+    "doctrine-transactions": {
+      "source": "dev-toolings/superpowers-symfony",
+      "sourceType": "github",
+      "skillPath": "content/skills/doctrine-transactions/SKILL.md",
+      "computedHash": "ca40cf899bac656ab426df4522079d88cce5bd4cf219bad75229ac16cc87bedc"
     },
     "functional-tests": {
       "source": "dev-toolings/superpowers-symfony",
@@ -31,11 +61,29 @@
       "skillPath": "content/skills/quality-checks/SKILL.md",
       "computedHash": "a835315f6caa371487933ba17d8b9d82dec92941c05bb8a53eb2215e0f501431"
     },
+    "rate-limiting": {
+      "source": "dev-toolings/superpowers-symfony",
+      "sourceType": "github",
+      "skillPath": "content/skills/rate-limiting/SKILL.md",
+      "computedHash": "51629981c245575030eba0be3da2c9ead047d63495a946c523e0b165311e9371"
+    },
+    "symfony-cache": {
+      "source": "dev-toolings/superpowers-symfony",
+      "sourceType": "github",
+      "skillPath": "content/skills/symfony-cache/SKILL.md",
+      "computedHash": "3ffeb8ba35ce46bef35cd3241f39c809bdda11d68aaf77a2d2e4b354eca86607"
+    },
     "tdd-with-phpunit": {
       "source": "dev-toolings/superpowers-symfony",
       "sourceType": "github",
       "skillPath": "content/skills/tdd-with-phpunit/SKILL.md",
       "computedHash": "c5c19e8dd81c299405dae57045912e1aa08ea267d56fc3969c203ad5bf90c64e"
+    },
+    "value-objects-and-dtos": {
+      "source": "dev-toolings/superpowers-symfony",
+      "sourceType": "github",
+      "skillPath": "content/skills/value-objects-and-dtos/SKILL.md",
+      "computedHash": "414c2c5bee2788f7918b452b65d2a4bcbf0ea16942c55ace788cbe3713268209"
     }
   }
 }

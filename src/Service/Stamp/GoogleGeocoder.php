@@ -40,10 +40,7 @@ final class GoogleGeocoder implements GeocoderInterface
 
         $statusCode = $response->getStatusCode();
         if ($statusCode < 200 || $statusCode >= 300) {
-            throw new \RuntimeException(sprintf(
-                'Google Geocoding HTTP request failed with status %d.',
-                $statusCode,
-            ));
+            throw new \RuntimeException(sprintf('Google Geocoding HTTP request failed with status %d.', $statusCode));
         }
 
         /** @var array{status?: string, error_message?: string, results?: list<array{geometry?: array{location?: array{lat?: float|int, lng?: float|int}}}>} $payload */
@@ -51,11 +48,7 @@ final class GoogleGeocoder implements GeocoderInterface
         $status = $payload['status'] ?? 'UNKNOWN';
 
         if ('REQUEST_DENIED' === $status || 'OVER_QUERY_LIMIT' === $status) {
-            throw new \RuntimeException(sprintf(
-                'Google Geocoding failed with status %s: %s',
-                $status,
-                $payload['error_message'] ?? 'no details',
-            ));
+            throw new \RuntimeException(sprintf('Google Geocoding failed with status %s: %s', $status, $payload['error_message'] ?? 'no details'));
         }
 
         if ('OK' !== $status) {

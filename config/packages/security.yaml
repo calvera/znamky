@@ -25,6 +25,8 @@ security:
                 password_path: password
                 success_handler: lexik_jwt_authentication.handler.authentication_success
                 failure_handler: lexik_jwt_authentication.handler.authentication_failure
+            login_throttling:
+                limiter: app.login_rate_limiter
         refresh:
             pattern: ^/api/token/refresh
             stateless: true

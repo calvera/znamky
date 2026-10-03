@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Service\Auth;
 
-use App\Entity\User;
 use App\Repository\UserRepository;
 use App\Security\TokenHasher;
 use Gesdinet\JWTRefreshTokenBundle\Model\RevokeRefreshTokenManagerInterface;

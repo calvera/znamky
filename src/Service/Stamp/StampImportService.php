@@ -134,8 +134,8 @@ final class StampImportService
     }
 
     /**
-     * @param list<?string>         $row
-     * @param array<string, int>    $indexes
+     * @param list<?string>      $row
+     * @param array<string, int> $indexes
      */
     private function importRow(
         array $row,

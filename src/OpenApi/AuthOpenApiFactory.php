@@ -86,9 +86,10 @@ final class AuthOpenApiFactory implements OpenApiFactoryInterface
                 (string) HttpResponse::HTTP_UNPROCESSABLE_ENTITY => $this->validationFailedResponse(
                     'Validation failed (invalid email/password or duplicate email)',
                 ),
+                (string) HttpResponse::HTTP_TOO_MANY_REQUESTS => $this->tooManyRequestsResponse(),
             ],
             summary: 'Register a new user',
-            description: 'Creates an unverified user and sends a verification token by email.',
+            description: 'Creates an unverified user and sends a verification token by email. Rate limited per client IP.',
             requestBody: new RequestBody(
                 description: 'Registration credentials',
                 content: new \ArrayObject([
@@ -117,9 +118,10 @@ final class AuthOpenApiFactory implements OpenApiFactoryInterface
                 (string) HttpResponse::HTTP_UNPROCESSABLE_ENTITY => $this->validationFailedResponse(
                     'Invalid payload, or invalid/expired token',
                 ),
+                (string) HttpResponse::HTTP_TOO_MANY_REQUESTS => $this->tooManyRequestsResponse(),
             ],
             summary: 'Verify email address',
-            description: 'Confirms the account using the raw token from the verification email. The password in this request becomes the account password and replaces the one from registration.',
+            description: 'Confirms the account using the raw token from the verification email. The password in this request becomes the account password and replaces the one from registration. Rate limited per client IP.',
             requestBody: new RequestBody(
                 description: 'Verification token and the password chosen by the mailbox owner',
                 content: new \ArrayObject([
@@ -150,9 +152,10 @@ final class AuthOpenApiFactory implements OpenApiFactoryInterface
                 (string) HttpResponse::HTTP_UNPROCESSABLE_ENTITY => $this->validationFailedResponse(
                     'Validation failed (invalid email)',
                 ),
+                (string) HttpResponse::HTTP_TOO_MANY_REQUESTS => $this->tooManyRequestsResponse(),
             ],
             summary: 'Request password reset email',
-            description: 'If the email belongs to a user, sends a reset token by email.',
+            description: 'If the email belongs to a user, sends a reset token by email. Rate limited per client IP.',
             requestBody: new RequestBody(
                 description: 'Account email',
                 content: new \ArrayObject([
@@ -180,9 +183,10 @@ final class AuthOpenApiFactory implements OpenApiFactoryInterface
                 (string) HttpResponse::HTTP_UNPROCESSABLE_ENTITY => $this->validationFailedResponse(
                     'Invalid payload, or invalid/expired token',
                 ),
+                (string) HttpResponse::HTTP_TOO_MANY_REQUESTS => $this->tooManyRequestsResponse(),
             ],
             summary: 'Reset password with email token',
-            description: 'Sets a new password using the raw token from the reset email. Revokes all refresh tokens for the user. Does not verify the email; an unverified account must still confirm the original verification token.',
+            description: 'Sets a new password using the raw token from the reset email. Revokes all refresh tokens for the user. Does not verify the email; an unverified account must still confirm the original verification token. Rate limited per client IP.',
             requestBody: new RequestBody(
                 description: 'Reset token and new password',
                 content: new \ArrayObject([
@@ -268,6 +272,13 @@ final class AuthOpenApiFactory implements OpenApiFactoryInterface
                     '$ref' => '#/components/schemas/ValidationFailed',
                 ])),
             ]),
+        );
+    }
+
+    private function tooManyRequestsResponse(): Response
+    {
+        return new Response(
+            description: 'Rate limit exceeded (Retry-After header set)',
         );
     }
 }

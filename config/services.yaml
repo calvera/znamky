@@ -23,5 +23,13 @@ services:
             - '../src/Dto/'
             - '../src/Kernel.php'
 
+    # DefaultLoginRateLimiter needs named limiter factories; attribute wiring can't express that.
+    app.login_rate_limiter:
+        class: Symfony\Component\Security\Http\RateLimiter\DefaultLoginRateLimiter
+        arguments:
+            $globalFactory: '@limiter.ip_login'
+            $localFactory: '@limiter.username_ip_login'
+            $secret: '%kernel.secret%'
+
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones

@@ -10,6 +10,9 @@ info:
     Validation errors for auth request DTOs return **422** with a
     `ValidationFailed` body (`title`, `detail`, `violations[]`).
 
+    GraphQL (read-only stamp catalog): `POST /api/graphql`, IDE at
+    `/api/graphql/graphiql`.
+
     Human docs: `docs/auth.md` (auth), `docs/stamps.md` (stamp catalog).
   version: 1.0.0
 servers:
@@ -31,8 +34,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ValidationFailed'
+        '429':
+          description: 'Rate limit exceeded (Retry-After header set)'
       summary: 'Request password reset email'
-      description: 'If the email belongs to a user, sends a reset token by email.'
+      description: 'If the email belongs to a user, sends a reset token by email. Rate limited per client IP.'
       requestBody:
         description: 'Account email'
         content:
@@ -124,8 +129,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ValidationFailed'
+        '429':
+          description: 'Rate limit exceeded (Retry-After header set)'
       summary: 'Register a new user'
-      description: 'Creates an unverified user and sends a verification token by email.'
+      description: 'Creates an unverified user and sends a verification token by email. Rate limited per client IP.'
       requestBody:
         description: 'Registration credentials'
         content:
@@ -158,8 +165,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ValidationFailed'
+        '429':
+          description: 'Rate limit exceeded (Retry-After header set)'
       summary: 'Reset password with email token'
-      description: 'Sets a new password using the raw token from the reset email. Revokes all refresh tokens for the user. Does not verify the email; an unverified account must still confirm the original verification token.'
+      description: 'Sets a new password using the raw token from the reset email. Revokes all refresh tokens for the user. Does not verify the email; an unverified account must still confirm the original verification token. Rate limited per client IP.'
       requestBody:
         description: 'Reset token and new password'
         content:
@@ -191,8 +200,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ValidationFailed'
+        '429':
+          description: 'Rate limit exceeded (Retry-After header set)'
       summary: 'Verify email address'
-      description: 'Confirms the account using the raw token from the verification email. The password in this request becomes the account password and replaces the one from registration.'
+      description: 'Confirms the account using the raw token from the verification email. The password in this request becomes the account password and replaces the one from registration. Rate limited per client IP.'
       requestBody:
         description: 'Verification token and the password chosen by the mailbox owner'
         content:
@@ -292,10 +303,10 @@ paths:
             application/ld+json:
               schema:
                 type: object
-                description: 'Stamp.jsonld collection.'
+                description: 'Stamp.jsonld-stamp.read collection.'
                 allOf:
                   - { $ref: '#/components/schemas/HydraCollectionBaseSchema' }
-                  - { type: object, required: [member], properties: { member: { type: array, items: { $ref: '#/components/schemas/Stamp.jsonld' } } } }
+                  - { type: object, required: [member], properties: { member: { type: array, items: { $ref: '#/components/schemas/Stamp.jsonld-stamp.read' } } } }
       summary: 'Retrieves the collection of Stamp resources.'
       description: 'Retrieves the collection of Stamp resources.'
       parameters:
@@ -411,7 +422,7 @@ paths:
           content:
             application/ld+json:
               schema:
-                $ref: '#/components/schemas/Stamp.jsonld'
+                $ref: '#/components/schemas/Stamp.jsonld-stamp.read'
         '404':
           description: 'Not found'
           content:
@@ -450,10 +461,10 @@ paths:
             application/ld+json:
               schema:
                 type: object
-                description: 'StampPlace.jsonld collection.'
+                description: 'StampPlace.jsonld-stamp_place.read collection.'
                 allOf:
                   - { $ref: '#/components/schemas/HydraCollectionBaseSchema' }
-                  - { type: object, required: [member], properties: { member: { type: array, items: { $ref: '#/components/schemas/StampPlace.jsonld' } } } }
+                  - { type: object, required: [member], properties: { member: { type: array, items: { $ref: '#/components/schemas/StampPlace.jsonld-stamp_place.read' } } } }
       summary: 'Retrieves the collection of StampPlace resources.'
       description: 'Retrieves the collection of StampPlace resources.'
       parameters:
@@ -489,7 +500,7 @@ paths:
           content:
             application/ld+json:
               schema:
-                $ref: '#/components/schemas/StampPlace.jsonld'
+                $ref: '#/components/schemas/StampPlace.jsonld-stamp_place.read'
         '404':
           description: 'Not found'
           content:
@@ -528,10 +539,10 @@ paths:
             application/ld+json:
               schema:
                 type: object
-                description: 'StampTag.jsonld collection.'
+                description: 'StampTag.jsonld-stamp_tag.read collection.'
                 allOf:
                   - { $ref: '#/components/schemas/HydraCollectionBaseSchema' }
-                  - { type: object, required: [member], properties: { member: { type: array, items: { $ref: '#/components/schemas/StampTag.jsonld' } } } }
+                  - { type: object, required: [member], properties: { member: { type: array, items: { $ref: '#/components/schemas/StampTag.jsonld-stamp_tag.read' } } } }
       summary: 'Retrieves the collection of StampTag resources.'
       description: 'Retrieves the collection of StampTag resources.'
       parameters:
@@ -589,7 +600,7 @@ paths:
           content:
             application/ld+json:
               schema:
-                $ref: '#/components/schemas/StampTag.jsonld'
+                $ref: '#/components/schemas/StampTag.jsonld-stamp_tag.read'
         '404':
           description: 'Not found'
           content:
@@ -777,7 +788,7 @@ components:
       required:
         - '@id'
         - '@type'
-    Stamp.jsonld:
+    Stamp.jsonld-stamp.read:
       allOf:
         -
           $ref: '#/components/schemas/HydraItemBaseSchema'
@@ -826,18 +837,14 @@ components:
             tags:
               type: array
               items:
-                type: string
-                format: iri-reference
-                example: 'https://example.com/'
+                $ref: '#/components/schemas/StampTag.jsonld-stamp.read'
             places:
               type: array
               items:
-                type: string
-                format: iri-reference
-                example: 'https://example.com/'
+                $ref: '#/components/schemas/StampPlace.jsonld-stamp.read'
           required:
             - name
-    StampPlace.jsonld:
+    StampPlace.jsonld-stamp.read:
       allOf:
         -
           $ref: '#/components/schemas/HydraItemBaseSchema'
@@ -864,7 +871,53 @@ components:
                 - 'null'
           required:
             - name
-    StampTag.jsonld:
+    StampPlace.jsonld-stamp_place.read:
+      allOf:
+        -
+          $ref: '#/components/schemas/HydraItemBaseSchema'
+        -
+          type: object
+          properties:
+            id:
+              readOnly: true
+              type: integer
+            name:
+              default: ''
+              type: string
+            url:
+              description: 'Empty string when the CSV line has no web URL (keeps the catalog key stable).'
+              default: ''
+              type: string
+            latitude:
+              type:
+                - number
+                - 'null'
+            longitude:
+              type:
+                - number
+                - 'null'
+          required:
+            - name
+    StampTag.jsonld-stamp.read:
+      allOf:
+        -
+          $ref: '#/components/schemas/HydraItemBaseSchema'
+        -
+          type: object
+          properties:
+            id:
+              readOnly: true
+              type: integer
+            name:
+              default: ''
+              type: string
+            slug:
+              default: ''
+              type: string
+          required:
+            - name
+            - slug
+    StampTag.jsonld-stamp_tag.read:
       allOf:
         -
           $ref: '#/components/schemas/HydraItemBaseSchema'

@@ -17,7 +17,9 @@ use Symfony\Component\HttpFoundation\Response;
 
 final class StampGraphQlTest extends WebTestCase
 {
+    use EmailTokenTestTrait;
     use MailerAssertionsTrait;
+    use RateLimiterTestTrait;
 
     private KernelBrowser $client;
 
@@ -25,6 +27,7 @@ final class StampGraphQlTest extends WebTestCase
     {
         $this->client = static::createClient();
         $this->purgeDatabase();
+        $this->clearRateLimiters();
         $this->seedCatalog();
     }
 
@@ -119,17 +122,8 @@ final class StampGraphQlTest extends WebTestCase
         self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
         self::assertEmailCount(1);
 
-        $emailMessage = self::getMailerMessage();
-        self::assertNotNull($emailMessage);
-        $body = method_exists($emailMessage, 'getHtmlBody') ? ($emailMessage->getHtmlBody() ?: '') : (string) $emailMessage;
-        if ('' === $body && method_exists($emailMessage, 'toString')) {
-            $body = $emailMessage->toString();
-        }
-        self::assertMatchesRegularExpression('/([a-f0-9]{64})/', $body);
-        preg_match('/([a-f0-9]{64})/', $body, $matches);
-
         $this->jsonRequest('POST', '/api/verify-email', [
-            'token' => $matches[1],
+            'token' => $this->extractTokenFromLastEmail(),
             'password' => $password,
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
