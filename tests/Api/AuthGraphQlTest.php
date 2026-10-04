@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Api;
 
+use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\MailerAssertionsTrait;
@@ -301,6 +302,279 @@ final class AuthGraphQlTest extends WebTestCase
         }
     }
 
+    public function testLoginRejectsUnverifiedAccountAndAcceptsRegisteredEmailCasing(): void
+    {
+        $email = 'Alice.GraphQl@Example.com';
+        $password = 'password123';
+
+        $register = $this->graphql(<<<'GRAPHQL'
+            mutation($email: String!, $password: String!) {
+              registerUser(input: { email: $email, password: $password }) {
+                user {
+                  email
+                }
+              }
+            }
+            GRAPHQL, variables: ['email' => $email, 'password' => $password]);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $register);
+        self::assertEmailCount(1);
+        $verificationToken = $this->extractTokenFromLastEmail();
+
+        $wrongPassword = $this->loginMutation($email, 'wrong-password');
+        $this->assertGraphQlError($wrongPassword, Response::HTTP_UNAUTHORIZED, 'Invalid credentials.');
+
+        $unverified = $this->loginMutation($email, $password);
+        $this->assertGraphQlError($unverified, Response::HTTP_UNAUTHORIZED, 'Please verify your email before logging in.');
+
+        $verify = $this->graphql(<<<'GRAPHQL'
+            mutation($token: String!, $password: String!) {
+              verifyEmailUser(input: { token: $token, password: $password }) {
+                user {
+                  success
+                }
+              }
+            }
+            GRAPHQL, variables: [
+            'token' => $verificationToken,
+            'password' => $password,
+        ]);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $verify);
+
+        $login = $this->loginMutation($email, $password);
+        self::assertResponseIsSuccessful();
+        $tokens = $this->tokensFromLogin($login);
+
+        $me = $this->graphql(<<<'GRAPHQL'
+            {
+              meUser {
+                email
+              }
+            }
+            GRAPHQL, $tokens['token']);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $me);
+        $meData = $this->stringKeyedArray($me['data'] ?? null, 'me data');
+        $meUser = $this->stringKeyedArray($meData['meUser'] ?? null, 'meUser');
+        self::assertSame(strtolower($email), $meUser['email'] ?? null);
+
+        $normalized = $this->loginMutation(strtolower($email), $password);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $normalized);
+    }
+
+    public function testFailedGraphQlLoginsAreThrottledAndSuccessResetsTheUsernameLimit(): void
+    {
+        $email = 'graphql-throttle@example.com';
+        $password = 'password123';
+        $this->registerVerifyAndLogin($email, $password);
+
+        for ($attempt = 1; $attempt <= 5; ++$attempt) {
+            $failed = $this->loginMutation($email, 'wrong-password');
+            $this->assertGraphQlError($failed, Response::HTTP_UNAUTHORIZED, 'Invalid credentials.');
+        }
+
+        $blocked = $this->loginMutation($email, $password);
+        $this->assertGraphQlError($blocked, Response::HTTP_UNAUTHORIZED, 'Too many failed login attempts');
+
+        $this->clearRateLimiters();
+
+        for ($attempt = 1; $attempt <= 4; ++$attempt) {
+            $failed = $this->loginMutation($email, 'wrong-password');
+            $this->assertGraphQlError($failed, Response::HTTP_UNAUTHORIZED, 'Invalid credentials.');
+        }
+
+        $success = $this->loginMutation($email, $password);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $success);
+
+        for ($attempt = 1; $attempt <= 5; ++$attempt) {
+            $failed = $this->loginMutation($email, 'wrong-password');
+            $this->assertGraphQlError($failed, Response::HTTP_UNAUTHORIZED, 'Invalid credentials.');
+        }
+
+        $blockedAgain = $this->loginMutation($email, 'wrong-password');
+        $this->assertGraphQlError($blockedAgain, Response::HTTP_UNAUTHORIZED, 'Too many failed login attempts');
+    }
+
+    public function testEmailAndTokenRateLimitsAreIndependent(): void
+    {
+        for ($i = 1; $i <= 4; ++$i) {
+            $register = $this->graphql(<<<'GRAPHQL'
+                mutation($email: String!, $password: String!) {
+                  registerUser(input: { email: $email, password: $password }) {
+                    user {
+                      email
+                    }
+                  }
+                }
+                GRAPHQL, variables: [
+                'email' => sprintf('graphql-limit-%d@example.com', $i),
+                'password' => 'password123',
+            ]);
+            self::assertResponseIsSuccessful();
+            self::assertArrayNotHasKey('errors', $register, sprintf('register %d should succeed', $i));
+        }
+
+        $forgot = $this->graphql(<<<'GRAPHQL'
+            mutation($email: String!) {
+              forgotPasswordUser(input: { email: $email }) {
+                user {
+                  success
+                }
+              }
+            }
+            GRAPHQL, variables: ['email' => 'graphql-limit-missing@example.com']);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $forgot);
+
+        $blockedRegister = $this->graphql(<<<'GRAPHQL'
+            mutation {
+              registerUser(input: { email: "graphql-limit-overflow@example.com", password: "password123" }) {
+                user {
+                  email
+                }
+              }
+            }
+            GRAPHQL);
+        $this->assertGraphQlError($blockedRegister, Response::HTTP_TOO_MANY_REQUESTS, 'Too Many Requests');
+
+        for ($i = 1; $i <= 5; ++$i) {
+            $verify = $this->graphql(<<<'GRAPHQL'
+                mutation($token: String!, $password: String!) {
+                  verifyEmailUser(input: { token: $token, password: $password }) {
+                    user {
+                      success
+                    }
+                  }
+                }
+                GRAPHQL, variables: [
+                'token' => sprintf('not-a-real-token-%d', $i),
+                'password' => 'password123',
+            ]);
+            $this->assertGraphQlError($verify, Response::HTTP_UNPROCESSABLE_ENTITY, 'Invalid verification token.');
+        }
+
+        $blockedVerify = $this->graphql(<<<'GRAPHQL'
+            mutation {
+              verifyEmailUser(input: { token: "not-a-real-token-overflow", password: "password123" }) {
+                user {
+                  success
+                }
+              }
+            }
+            GRAPHQL);
+        $this->assertGraphQlError($blockedVerify, Response::HTTP_TOO_MANY_REQUESTS, 'Too Many Requests');
+    }
+
+    public function testDuplicateRegistrationReturnsValidationError(): void
+    {
+        $email = 'graphql-dup@example.com';
+        $password = 'password123';
+
+        $first = $this->graphql(<<<'GRAPHQL'
+            mutation($email: String!, $password: String!) {
+              registerUser(input: { email: $email, password: $password }) {
+                user {
+                  email
+                }
+              }
+            }
+            GRAPHQL, variables: ['email' => $email, 'password' => $password]);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $first);
+        self::assertEmailCount(1);
+        $verificationToken = $this->extractTokenFromLastEmail();
+
+        $duplicate = $this->graphql(<<<'GRAPHQL'
+            mutation($email: String!, $password: String!) {
+              registerUser(input: { email: $email, password: $password }) {
+                user {
+                  email
+                }
+              }
+            }
+            GRAPHQL, variables: ['email' => strtoupper($email), 'password' => $password]);
+        $this->assertGraphQlError($duplicate, Response::HTTP_UNPROCESSABLE_ENTITY, 'An account with this email already exists.');
+
+        $users = static::getContainer()->get(UserRepository::class);
+        self::assertInstanceOf(UserRepository::class, $users);
+        self::assertNotNull($users->findOneByEmail($email));
+
+        $verify = $this->graphql(<<<'GRAPHQL'
+            mutation($token: String!, $password: String!) {
+              verifyEmailUser(input: { token: $token, password: $password }) {
+                user {
+                  success
+                }
+              }
+            }
+            GRAPHQL, variables: ['token' => $verificationToken, 'password' => $password]);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $verify);
+
+        $login = $this->loginMutation($email, $password);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $login);
+    }
+
+    public function testShortResetPasswordDoesNotConsumeTheToken(): void
+    {
+        $email = 'graphql-short-reset@example.com';
+        $oldPassword = 'password123';
+        $newPassword = 'newpassword456';
+        $this->registerVerifyAndLogin($email, $oldPassword);
+
+        $forgot = $this->graphql(<<<'GRAPHQL'
+            mutation($email: String!) {
+              forgotPasswordUser(input: { email: $email }) {
+                user {
+                  success
+                }
+              }
+            }
+            GRAPHQL, variables: ['email' => $email]);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $forgot);
+        self::assertEmailCount(1);
+        $resetToken = $this->extractTokenFromLastEmail();
+
+        $tooShort = $this->graphql(<<<'GRAPHQL'
+            mutation($token: String!, $password: String!) {
+              resetPasswordUser(input: { token: $token, password: $password }) {
+                user {
+                  success
+                }
+              }
+            }
+            GRAPHQL, variables: ['token' => $resetToken, 'password' => 'short']);
+        $this->assertGraphQlError($tooShort, Response::HTTP_UNPROCESSABLE_ENTITY, 'too short');
+
+        $stillOld = $this->loginMutation($email, $oldPassword);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $stillOld);
+
+        $reset = $this->graphql(<<<'GRAPHQL'
+            mutation($token: String!, $password: String!) {
+              resetPasswordUser(input: { token: $token, password: $password }) {
+                user {
+                  success
+                }
+              }
+            }
+            GRAPHQL, variables: ['token' => $resetToken, 'password' => $newPassword]);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $reset);
+
+        $oldLogin = $this->loginMutation($email, $oldPassword);
+        $this->assertGraphQlError($oldLogin, Response::HTTP_UNAUTHORIZED, 'Invalid credentials.');
+
+        $newLogin = $this->loginMutation($email, $newPassword);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $newLogin);
+    }
+
     /**
      * @return array{token: string, refreshToken: string}
      */
@@ -332,7 +606,18 @@ final class AuthGraphQlTest extends WebTestCase
         ]);
         self::assertResponseIsSuccessful();
 
-        $login = $this->graphql(<<<'GRAPHQL'
+        $login = $this->loginMutation($email, $password);
+        self::assertResponseIsSuccessful();
+
+        return $this->tokensFromLogin($login);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function loginMutation(string $email, string $password): array
+    {
+        return $this->graphql(<<<'GRAPHQL'
             mutation($email: String!, $password: String!) {
               loginUser(input: { email: $email, password: $password }) {
                 user {
@@ -342,7 +627,15 @@ final class AuthGraphQlTest extends WebTestCase
               }
             }
             GRAPHQL, variables: ['email' => $email, 'password' => $password]);
-        self::assertResponseIsSuccessful();
+    }
+
+    /**
+     * @param array<string, mixed> $login
+     *
+     * @return array{token: string, refreshToken: string}
+     */
+    private function tokensFromLogin(array $login): array
+    {
         self::assertArrayNotHasKey('errors', $login);
 
         $loginData = $this->stringKeyedArray($login['data'] ?? null, 'login data');
@@ -355,6 +648,51 @@ final class AuthGraphQlTest extends WebTestCase
         }
 
         return ['token' => $token, 'refreshToken' => $refreshToken];
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function assertGraphQlError(array $payload, int $status, string $messagePart): void
+    {
+        if (
+            Response::HTTP_TOO_MANY_REQUESTS === $status
+            && Response::HTTP_TOO_MANY_REQUESTS === $this->client->getResponse()->getStatusCode()
+        ) {
+            return;
+        }
+
+        $errors = $payload['errors'] ?? null;
+        if (!\is_array($errors) || [] === $errors) {
+            self::fail(sprintf('Expected GraphQL error %d containing "%s".', $status, $messagePart));
+        }
+
+        foreach ($errors as $error) {
+            if (!\is_array($error)) {
+                continue;
+            }
+
+            $message = $error['message'] ?? null;
+            if (!\is_string($message) || !str_contains($message, $messagePart)) {
+                continue;
+            }
+
+            $extensions = $error['extensions'] ?? null;
+            if (!\is_array($extensions)) {
+                continue;
+            }
+
+            if ($status === ($extensions['status'] ?? null)) {
+                return;
+            }
+        }
+
+        self::fail(sprintf(
+            'Expected GraphQL error %d containing "%s". Body: %s',
+            $status,
+            $messagePart,
+            $this->client->getResponse()->getContent() ?: '',
+        ));
     }
 
     /**
