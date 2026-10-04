@@ -68,7 +68,7 @@ final class GoogleGeocoderTest extends TestCase
     {
         $geocoder = new GoogleGeocoder(new MockHttpClient(), '');
 
-        $this->expectException(\RuntimeException::class);
+        $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('GOOGLE_MAPS_API_KEY');
         $geocoder->geocode('Praděd');
     }
