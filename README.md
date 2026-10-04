@@ -79,6 +79,36 @@ GitHub Actions (`.github/workflows/tests.yml`) runs this suite on every push and
 pull request against PostgreSQL 16. The job prints PHPUnit's coverage report in
 the logs and uploads Clover and Cobertura reports as artifacts.
 
+## Production Docker
+
+Multi-stage FrankenPHP image (`Dockerfile`). Build locally:
+
+```bash
+docker build --target prod -t znamky .
+```
+
+Run with production secrets and a reachable Postgres (JWT PEMs via volume or
+env paths):
+
+```bash
+docker run --rm -p 8080:80 \
+  -e APP_SECRET=... \
+  -e DATABASE_URL='postgresql://...' \
+  -e MAILER_DSN=... \
+  -e MAILER_FROM=noreply@example.com \
+  -e CORS_ALLOW_ORIGIN='^https://example\.com$' \
+  -e JWT_PASSPHRASE=... \
+  -v "$PWD/config/jwt:/app/config/jwt:ro" \
+  znamky
+```
+
+On start the entrypoint waits for the database and runs migrations when
+`DATABASE_URL` is set.
+
+Pushing a `v*` git tag builds and publishes to GHCR
+(`ghcr.io/<owner>/<repo>`) via `.github/workflows/docker.yml` (semver tags +
+`latest`).
+
 ## Stack
 
 - Symfony 8.1, API Platform 5 (REST + GraphQL), Doctrine ORM, PostgreSQL
