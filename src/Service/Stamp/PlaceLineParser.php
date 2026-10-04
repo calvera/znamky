@@ -67,7 +67,7 @@ final class PlaceLineParser
         ];
     }
 
-    public function looksLikeUrl(string $value): bool
+    private function looksLikeUrl(string $value): bool
     {
         $value = trim($value);
         if ('' === $value) {
@@ -82,7 +82,7 @@ final class PlaceLineParser
         return (bool) preg_match('/^[a-z0-9]([a-z0-9.-]*[a-z0-9])?\.[a-z]{2,}(\/.*)?$/i', $value);
     }
 
-    public function normalizeUrl(string $value): string
+    private function normalizeUrl(string $value): string
     {
         $value = trim($value);
         if (preg_match('#^https?://#i', $value)) {

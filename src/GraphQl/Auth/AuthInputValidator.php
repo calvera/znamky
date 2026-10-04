@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\GraphQl;
+namespace App\GraphQl\Auth;
 
 use ApiPlatform\Validator\Exception\ValidationException;
 use Symfony\Component\Validator\Exception\ValidationFailedException;

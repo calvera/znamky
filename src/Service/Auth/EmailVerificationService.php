@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Service\Auth;
 
 use App\Repository\UserRepository;
-use App\Security\TokenHasher;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 

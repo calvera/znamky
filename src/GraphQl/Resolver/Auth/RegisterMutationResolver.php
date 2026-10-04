@@ -7,8 +7,8 @@ namespace App\GraphQl\Resolver\Auth;
 use ApiPlatform\GraphQl\Resolver\MutationResolverInterface;
 use App\ApiResource\Auth;
 use App\Dto\Auth\RegisterRequest;
-use App\GraphQl\AuthInputValidator;
-use App\GraphQl\AuthRateLimiter;
+use App\GraphQl\Auth\AuthInputValidator;
+use App\GraphQl\Auth\AuthRateLimiter;
 use App\Service\Auth\UserRegistrationService;
 use Symfony\Component\Validator\Exception\ValidationFailedException;
 

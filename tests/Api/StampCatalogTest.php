@@ -128,6 +128,12 @@ final class StampCatalogTest extends WebTestCase
         self::assertSame(9, $ordered[0]['number'] ?? null);
         self::assertSame(1, $ordered[\array_key_last($ordered)]['number'] ?? null);
 
+        $this->client->request('GET', '/api/stamps?page=1', server: $headers);
+        self::assertResponseIsSuccessful();
+
+        $this->client->request('GET', '/api/stamps?not_a_real_param=1', server: $headers);
+        self::assertResponseStatusCodeSame(Response::HTTP_BAD_REQUEST);
+
         $iri = $annual[0]['@id'] ?? null;
         self::assertIsString($iri);
         $path = parse_url($iri, \PHP_URL_PATH);

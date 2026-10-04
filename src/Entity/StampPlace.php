@@ -4,15 +4,16 @@ declare(strict_types=1);
 
 namespace App\Entity;
 
-use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
-use ApiPlatform\Metadata\ApiFilter;
+use ApiPlatform\Doctrine\Orm\Filter\PartialSearchFilter;
 use ApiPlatform\Metadata\ApiProperty;
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\GraphQl\Query;
 use ApiPlatform\Metadata\GraphQl\QueryCollection;
+use ApiPlatform\Metadata\QueryParameter;
 use App\Repository\StampPlaceRepository;
+use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Validator\Constraints as Assert;
@@ -23,17 +24,23 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ApiResource(
     operations: [
         new Get(),
-        new GetCollection(),
+        new GetCollection(
+            parameters: [
+                'name' => new QueryParameter(filter: new PartialSearchFilter(), property: 'name'),
+            ],
+        ),
     ],
     graphQlOperations: [
         new Query(security: 'is_granted("IS_AUTHENTICATED_FULLY")'),
-        new QueryCollection(security: 'is_granted("IS_AUTHENTICATED_FULLY")'),
+        new QueryCollection(
+            security: 'is_granted("IS_AUTHENTICATED_FULLY")',
+            parameters: [
+                'name' => new QueryParameter(filter: new PartialSearchFilter(), property: 'name'),
+            ],
+        ),
     ],
     normalizationContext: ['groups' => ['stamp_place:read']],
 )]
-#[ApiFilter(SearchFilter::class, properties: [
-    'name' => 'partial',
-])]
 class StampPlace
 {
     #[ORM\Id]
@@ -42,7 +49,7 @@ class StampPlace
     #[Groups(['stamp_place:read', 'stamp:read'])]
     private ?int $id = null;
 
-    #[ORM\Column(type: 'text')]
+    #[ORM\Column(type: Types::TEXT)]
     #[Assert\NotBlank]
     #[Groups(['stamp_place:read', 'stamp:read'])]
     private string $name = '';
@@ -50,7 +57,7 @@ class StampPlace
     /**
      * Empty string when the CSV line has no web URL (keeps the catalog key stable).
      */
-    #[ORM\Column(type: 'text')]
+    #[ORM\Column(type: Types::TEXT)]
     #[Groups(['stamp_place:read', 'stamp:read'])]
     private string $url = '';
 
@@ -61,13 +68,11 @@ class StampPlace
     #[ApiProperty(readable: false, writable: false)]
     private string $catalogKey = '';
 
-    #[ORM\Column(nullable: true)]
-    #[Groups(['stamp_place:read', 'stamp:read'])]
-    private ?float $latitude = null;
+    #[ORM\Column(type: Types::DECIMAL, precision: 10, scale: 7, nullable: true)]
+    private ?string $latitude = null;
 
-    #[ORM\Column(nullable: true)]
-    #[Groups(['stamp_place:read', 'stamp:read'])]
-    private ?float $longitude = null;
+    #[ORM\Column(type: Types::DECIMAL, precision: 10, scale: 7, nullable: true)]
+    private ?string $longitude = null;
 
     public function getId(): ?int
     {
@@ -115,26 +120,28 @@ class StampPlace
         $this->catalogKey = self::buildCatalogKey($this->name, '' === $this->url ? null : $this->url);
     }
 
+    #[Groups(['stamp_place:read', 'stamp:read'])]
     public function getLatitude(): ?float
     {
-        return $this->latitude;
+        return null === $this->latitude ? null : (float) $this->latitude;
     }
 
     public function setLatitude(?float $latitude): static
     {
-        $this->latitude = $latitude;
+        $this->latitude = null === $latitude ? null : \sprintf('%.7F', $latitude);
 
         return $this;
     }
 
+    #[Groups(['stamp_place:read', 'stamp:read'])]
     public function getLongitude(): ?float
     {
-        return $this->longitude;
+        return null === $this->longitude ? null : (float) $this->longitude;
     }
 
     public function setLongitude(?float $longitude): static
     {
-        $this->longitude = $longitude;
+        $this->longitude = null === $longitude ? null : \sprintf('%.7F', $longitude);
 
         return $this;
     }

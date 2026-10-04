@@ -6,9 +6,9 @@ namespace App\Tests\Api;
 
 use App\Entity\User;
 use App\Repository\UserRepository;
-use App\Security\TokenHasher;
 use App\Service\Auth\AuthMailer;
 use App\Service\Auth\PasswordResetService;
+use App\Service\Auth\TokenHasher;
 use Doctrine\ORM\EntityManagerInterface;
 use Gesdinet\JWTRefreshTokenBundle\Model\RevokeRefreshTokenManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
@@ -914,9 +914,6 @@ final class AuthTest extends WebTestCase
         self::assertResponseIsSuccessful();
     }
 
-    /**
-     * @param array<string, mixed> $payload
-     */
     private function installThrowingMailer(): void
     {
         static::getContainer()->set(MailerInterface::class, new class implements MailerInterface {
@@ -927,6 +924,9 @@ final class AuthTest extends WebTestCase
         });
     }
 
+    /**
+     * @param array<string, mixed> $payload
+     */
     private function jsonRequest(string $method, string $uri, array $payload = []): void
     {
         $this->client->request(

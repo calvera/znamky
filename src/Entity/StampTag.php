@@ -4,13 +4,14 @@ declare(strict_types=1);
 
 namespace App\Entity;
 
-use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
-use ApiPlatform\Metadata\ApiFilter;
+use ApiPlatform\Doctrine\Orm\Filter\ExactFilter;
+use ApiPlatform\Doctrine\Orm\Filter\PartialSearchFilter;
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\GraphQl\Query;
 use ApiPlatform\Metadata\GraphQl\QueryCollection;
+use ApiPlatform\Metadata\QueryParameter;
 use App\Repository\StampTagRepository;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Serializer\Attribute\Groups;
@@ -23,18 +24,25 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ApiResource(
     operations: [
         new Get(),
-        new GetCollection(),
+        new GetCollection(
+            parameters: [
+                'name' => new QueryParameter(filter: new PartialSearchFilter(), property: 'name'),
+                'slug' => new QueryParameter(filter: new ExactFilter(), property: 'slug'),
+            ],
+        ),
     ],
     graphQlOperations: [
         new Query(security: 'is_granted("IS_AUTHENTICATED_FULLY")'),
-        new QueryCollection(security: 'is_granted("IS_AUTHENTICATED_FULLY")'),
+        new QueryCollection(
+            security: 'is_granted("IS_AUTHENTICATED_FULLY")',
+            parameters: [
+                'name' => new QueryParameter(filter: new PartialSearchFilter(), property: 'name'),
+                'slug' => new QueryParameter(filter: new ExactFilter(), property: 'slug'),
+            ],
+        ),
     ],
     normalizationContext: ['groups' => ['stamp_tag:read']],
 )]
-#[ApiFilter(SearchFilter::class, properties: [
-    'name' => 'partial',
-    'slug' => 'exact',
-])]
 class StampTag
 {
     #[ORM\Id]

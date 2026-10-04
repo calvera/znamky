@@ -211,7 +211,7 @@ Put real secrets in `.env.local` (git-ignored), not in committed `.env`:
 | GraphQL resolvers | `src/GraphQl/Resolver/Auth/` |
 | User entity | `src/Entity/User.php` |
 | Block unverified login | `src/Security/UserChecker.php` |
-| Validation error JSON | `src/EventSubscriber/ValidationFailedExceptionSubscriber.php` |
+| Validation error JSON | `src/EventListener/ValidationFailedExceptionListener.php` |
 | OpenAPI auth paths | `src/OpenApi/AuthOpenApiFactory.php` |
 | Email templates | `templates/email/` |
 | Functional tests | `tests/Api/AuthTest.php`, `tests/Api/AuthGraphQlTest.php` |

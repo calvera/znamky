@@ -49,6 +49,10 @@ php bin/console app:stamps:import --path=/other/dir --no-debug
 Upserts by natural keys. Re-import **preserves** existing lat/lng unless
 `--purge`. Import does **not** call Google.
 
+`--purge` wipes the catalog with a single DBAL `TRUNCATE … CASCADE` (join tables
+included) and resets identities — intentional; an ORM delete of the full catalog
+is slower and more fragile under foreign keys.
+
 Import and geocode share a Symfony Lock resource (`stamps-catalog`, via
 `LOCK_DSN`, default `flock`). A second concurrent run exits with an error
 instead of racing a purge/import.
@@ -100,6 +104,9 @@ No Post/Put/Patch/Delete (REST or GraphQL). Lat/lng are included when set. Place
 `stamp_tag:read`, `stamp_place:read`) so new entity fields stay private until
 opted in.
 
+Unknown REST query parameters are rejected with **400** (`strict_query_parameter_validation`).
+Declared filters and pagination (`page`, etc.) remain allowed.
+
 ```http
 GET /api/stamps?country=CZ&type=regular&order[number]=asc
 Authorization: Bearer <jwt>
@@ -116,7 +123,7 @@ Authorization: Bearer <jwt>
 Stamp catalog queries still require `Authorization: Bearer <jwt>`. GraphiQL UI at
 `/api/graphql/graphiql` is public (paste the Bearer token in the IDE headers).
 Root queries: `stamps`, `stamp`, `stampTags`, `stampTag`, `stampPlaces`,
-`stampPlace`. Filters match the REST SearchFilter/OrderFilter arguments. No
+`stampPlace`. Filters match the REST query parameters. No
 stamp create/update/delete mutations.
 
 ```http

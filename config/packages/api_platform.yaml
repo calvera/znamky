@@ -16,6 +16,7 @@ api_platform:
         Human docs: `docs/auth.md` (auth), `docs/stamps.md` (stamp catalog).
     defaults:
         stateless: true
+        strict_query_parameter_validation: true
         cache_headers:
             vary: ['Content-Type', 'Authorization', 'Origin']
     graphql:

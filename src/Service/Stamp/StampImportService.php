@@ -84,6 +84,10 @@ final class StampImportService
         ];
     }
 
+    /**
+     * Wipe the stamp catalog with TRUNCATE CASCADE (fast, resets identities).
+     * Prefer this over ORM deletes when clearing the full catalog for re-import.
+     */
     private function purgeCatalog(): void
     {
         $connection = $this->entityManager->getConnection();

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\GraphQl;
+namespace App\GraphQl\Auth;
 
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\RequestStack;

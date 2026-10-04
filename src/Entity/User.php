@@ -25,7 +25,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     /**
      * @var non-empty-string
      *
-     * DBAL maps string columns to string; emptiness is enforced in setEmail().
+     * DBAL maps string columns to string; emptiness is enforced in setEmail()
      */
     #[ORM\Column(length: 180)]
     #[Assert\NotBlank]

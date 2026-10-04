@@ -7,7 +7,7 @@ namespace App\GraphQl\Resolver\Auth;
 use ApiPlatform\GraphQl\Resolver\MutationResolverInterface;
 use App\ApiResource\Auth;
 use App\Dto\Auth\RefreshTokenRequest;
-use App\GraphQl\AuthInputValidator;
+use App\GraphQl\Auth\AuthInputValidator;
 use App\Service\Auth\AuthTokenService;
 
 final class RefreshTokenMutationResolver implements MutationResolverInterface
