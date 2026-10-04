@@ -84,21 +84,20 @@ final class AuthOpenApiFactory implements OpenApiFactoryInterface
                     ]),
                 ),
                 (string) HttpResponse::HTTP_UNPROCESSABLE_ENTITY => $this->validationFailedResponse(
-                    'Validation failed (invalid email/password or duplicate email)',
+                    'Validation failed (invalid or duplicate email)',
                 ),
                 (string) HttpResponse::HTTP_TOO_MANY_REQUESTS => $this->tooManyRequestsResponse(),
             ],
             summary: 'Register a new user',
-            description: 'Creates an unverified user and sends a verification token by email. Rate limited per client IP.',
+            description: 'Creates an unverified user and sends a verification token by email. The account password is set later via verify-email. Rate limited per client IP.',
             requestBody: new RequestBody(
-                description: 'Registration credentials',
+                description: 'Registration email',
                 content: new \ArrayObject([
                     'application/json' => new MediaType(schema: new \ArrayObject([
                         'type' => 'object',
-                        'required' => ['email', 'password'],
+                        'required' => ['email'],
                         'properties' => [
                             'email' => ['type' => 'string', 'format' => 'email'],
-                            'password' => ['type' => 'string', 'minLength' => 8],
                         ],
                     ])),
                 ]),
@@ -121,7 +120,7 @@ final class AuthOpenApiFactory implements OpenApiFactoryInterface
                 (string) HttpResponse::HTTP_TOO_MANY_REQUESTS => $this->tooManyRequestsResponse(),
             ],
             summary: 'Verify email address',
-            description: 'Confirms the account using the raw token from the verification email. The password in this request becomes the account password and replaces the one from registration. Rate limited per client IP.',
+            description: 'Confirms the account using the raw token from the verification email and sets the account password. Rate limited per client IP.',
             requestBody: new RequestBody(
                 description: 'Verification token and the password chosen by the mailbox owner',
                 content: new \ArrayObject([

@@ -43,7 +43,6 @@ final class AuthTest extends WebTestCase
 
         $this->jsonRequest('POST', '/api/register', [
             'email' => 'smtp-down@example.com',
-            'password' => 'password123',
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_INTERNAL_SERVER_ERROR);
 
@@ -57,7 +56,6 @@ final class AuthTest extends WebTestCase
 
         $this->jsonRequest('POST', '/api/register', [
             'email' => 'smtp-down@example.com',
-            'password' => 'password123',
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
 
@@ -116,7 +114,6 @@ final class AuthTest extends WebTestCase
 
         $this->jsonRequest('POST', '/api/register', [
             'email' => $email,
-            'password' => $password,
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
         self::assertEmailCount(1);
@@ -169,14 +166,13 @@ final class AuthTest extends WebTestCase
 
         $this->jsonRequest('POST', '/api/register', [
             'email' => strtolower($email),
-            'password' => $password,
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
     }
 
     public function testRegisterDuplicateEmailReturns422(): void
     {
-        $payload = ['email' => 'dup@example.com', 'password' => 'password123'];
+        $payload = ['email' => 'dup@example.com'];
         $this->jsonRequest('POST', '/api/register', $payload);
         self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
 
@@ -188,7 +184,6 @@ final class AuthTest extends WebTestCase
     {
         $this->jsonRequest('POST', '/api/register', [
             'email' => 'not-an-email',
-            'password' => 'short',
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
 
@@ -306,30 +301,28 @@ final class AuthTest extends WebTestCase
         self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
     }
 
-    public function testVerifyReplacesPasswordFromRegistration(): void
+    public function testVerifySetsAccountPassword(): void
     {
         $email = 'victim@example.com';
-        $registrationPassword = 'attacker-password';
         $ownerPassword = 'owner-password-1';
 
         $this->jsonRequest('POST', '/api/register', [
             'email' => $email,
-            'password' => $registrationPassword,
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
         $token = $this->extractTokenFromLastEmail();
+
+        $this->jsonRequest('POST', '/api/login', [
+            'email' => $email,
+            'password' => $ownerPassword,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
 
         $this->jsonRequest('POST', '/api/verify-email', [
             'token' => $token,
             'password' => $ownerPassword,
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
-
-        $this->jsonRequest('POST', '/api/login', [
-            'email' => $email,
-            'password' => $registrationPassword,
-        ]);
-        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
 
         $this->login($email, $ownerPassword);
     }
@@ -341,7 +334,6 @@ final class AuthTest extends WebTestCase
 
         $this->jsonRequest('POST', '/api/register', [
             'email' => $email,
-            'password' => $password,
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
         $token = $this->extractTokenFromLastEmail();
@@ -366,7 +358,6 @@ final class AuthTest extends WebTestCase
     {
         $this->jsonRequest('POST', '/api/register', [
             'email' => 'User@Example.com',
-            'password' => 'password123',
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
         $created = $this->jsonResponse();
@@ -375,7 +366,6 @@ final class AuthTest extends WebTestCase
 
         $this->jsonRequest('POST', '/api/register', [
             'email' => 'user@example.com',
-            'password' => 'password123',
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
 
@@ -400,7 +390,6 @@ final class AuthTest extends WebTestCase
         $password = 'password123';
         $this->jsonRequest('POST', '/api/register', [
             'email' => $email,
-            'password' => $password,
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
         $token = $this->extractTokenFromLastEmail();
@@ -425,7 +414,6 @@ final class AuthTest extends WebTestCase
         $password = 'password123';
         $this->jsonRequest('POST', '/api/register', [
             'email' => $email,
-            'password' => $password,
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
         $token = $this->extractTokenFromLastEmail();
@@ -636,12 +624,10 @@ final class AuthTest extends WebTestCase
     public function testPasswordResetDoesNotVerifyUnverifiedAccount(): void
     {
         $email = 'unverified-reset@example.com';
-        $oldPassword = 'password123';
         $newPassword = 'newpassword456';
 
         $this->jsonRequest('POST', '/api/register', [
             'email' => $email,
-            'password' => $oldPassword,
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
         $verificationToken = $this->extractTokenFromLastEmail();
@@ -663,12 +649,6 @@ final class AuthTest extends WebTestCase
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
 
-        $this->jsonRequest('POST', '/api/login', [
-            'email' => $email,
-            'password' => $oldPassword,
-        ]);
-        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
-
         $this->jsonRequest('POST', '/api/verify-email', [
             'token' => $verificationToken,
             'password' => $newPassword,
@@ -681,13 +661,11 @@ final class AuthTest extends WebTestCase
     public function testVerifyAfterResetUsesPasswordChosenAtVerification(): void
     {
         $email = 'verify-after-reset@example.com';
-        $registrationPassword = 'password123';
         $resetPassword = 'resetpassword1';
         $verificationPassword = 'chosen-by-inbox';
 
         $this->jsonRequest('POST', '/api/register', [
             'email' => $email,
-            'password' => $registrationPassword,
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
         $verificationToken = $this->extractTokenFromLastEmail();
@@ -717,12 +695,6 @@ final class AuthTest extends WebTestCase
         $this->jsonRequest('POST', '/api/login', [
             'email' => $email,
             'password' => $resetPassword,
-        ]);
-        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
-
-        $this->jsonRequest('POST', '/api/login', [
-            'email' => $email,
-            'password' => $registrationPassword,
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
 
@@ -772,7 +744,6 @@ final class AuthTest extends WebTestCase
         $password = 'password123';
         $this->jsonRequest('POST', '/api/register', [
             'email' => $email,
-            'password' => $password,
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
         $token = $this->extractTokenFromLastEmail();
@@ -810,7 +781,6 @@ final class AuthTest extends WebTestCase
         $registeredAt = new \DateTimeImmutable();
         $this->jsonRequest('POST', '/api/register', [
             'email' => $email,
-            'password' => 'password123',
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
 
@@ -875,7 +845,6 @@ final class AuthTest extends WebTestCase
 
         $this->jsonRequest('POST', '/api/register', [
             'email' => 'other@example.com',
-            'password' => 'password123',
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
         $this->jsonRequest('POST', '/api/verify-email', [
@@ -960,7 +929,6 @@ final class AuthTest extends WebTestCase
     {
         $this->jsonRequest('POST', '/api/register', [
             'email' => $email,
-            'password' => $password,
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
         self::assertEmailCount(1);

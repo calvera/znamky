@@ -146,7 +146,6 @@ final class StampGraphQlTest extends WebTestCase
 
         $this->jsonRequest('POST', '/api/register', [
             'email' => $email,
-            'password' => $password,
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
         self::assertEmailCount(1);

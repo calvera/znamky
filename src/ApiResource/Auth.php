@@ -31,7 +31,6 @@ use Symfony\Component\Serializer\Attribute\Groups;
             resolver: RegisterMutationResolver::class,
             args: [
                 'email' => ['type' => 'String!'],
-                'password' => ['type' => 'String!'],
             ],
             security: 'true',
             name: 'register',

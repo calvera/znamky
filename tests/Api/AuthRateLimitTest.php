@@ -27,14 +27,12 @@ final class AuthRateLimitTest extends WebTestCase
         for ($i = 1; $i <= 5; ++$i) {
             $this->jsonRequest('POST', '/api/register', [
                 'email' => sprintf('rate-%d@example.com', $i),
-                'password' => 'password123',
             ]);
             self::assertResponseStatusCodeSame(Response::HTTP_CREATED, sprintf('request %d should succeed', $i));
         }
 
         $this->jsonRequest('POST', '/api/register', [
             'email' => 'rate-overflow@example.com',
-            'password' => 'password123',
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_TOO_MANY_REQUESTS);
         self::assertTrue($this->client->getResponse()->headers->has('Retry-After'));

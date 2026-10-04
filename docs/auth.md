@@ -41,7 +41,7 @@ Example:
 
 ```graphql
 mutation {
-  registerUser(input: { email: "user@example.com", password: "password123" }) {
+  registerUser(input: { email: "user@example.com" }) {
     user { id email }
   }
 }
@@ -68,15 +68,15 @@ Code: `src/ApiResource/Auth.php`, resolvers in `src/GraphQl/Resolver/Auth/`.
 POST /api/register
 Content-Type: application/json
 
-{"email":"user@example.com","password":"password123"}
+{"email":"user@example.com"}
 ```
 
 **201** `{ "id": 1, "email": "user@example.com" }` — user is **not** verified yet.
 Login before verification returns **401**.
 
 The verification email body includes a raw token. Confirm it and set the password
-that will be used to log in. That password replaces the one sent at registration,
-so only the mailbox owner chooses the credential that can authenticate.
+that will be used to log in. Only the mailbox owner chooses the credential that
+can authenticate.
 
 ```http
 POST /api/verify-email
@@ -138,7 +138,8 @@ Content-Type: application/json
 
 **204** on success. All refresh tokens for the user are revoked. Reset does not
 verify the email; an unverified account still has to `POST /api/verify-email`
-with the original verification token and the password set here.
+with the original verification token and the password chosen at verification
+(verify overwrites any password set by reset).
 
 ## Logout
 

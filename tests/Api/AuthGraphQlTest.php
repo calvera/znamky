@@ -33,15 +33,15 @@ final class AuthGraphQlTest extends WebTestCase
         $password = 'password123';
 
         $register = $this->graphql(<<<'GRAPHQL'
-            mutation($email: String!, $password: String!) {
-              registerUser(input: { email: $email, password: $password }) {
+            mutation($email: String!) {
+              registerUser(input: { email: $email }) {
                 user {
                   email
                   id
                 }
               }
             }
-            GRAPHQL, variables: ['email' => $email, 'password' => $password]);
+            GRAPHQL, variables: ['email' => $email]);
 
         self::assertResponseIsSuccessful();
         self::assertArrayNotHasKey('errors', $register);
@@ -241,7 +241,7 @@ final class AuthGraphQlTest extends WebTestCase
     {
         $register = $this->graphql(<<<'GRAPHQL'
             mutation {
-              registerUser(input: { email: "public@example.com", password: "password123" }) {
+              registerUser(input: { email: "public@example.com" }) {
                 user {
                   email
                 }
@@ -278,7 +278,7 @@ final class AuthGraphQlTest extends WebTestCase
     {
         $payload = $this->graphql(<<<'GRAPHQL'
             mutation {
-              registerUser(input: { email: "not-an-email", password: "short" }) {
+              registerUser(input: { email: "not-an-email" }) {
                 user {
                   email
                 }
@@ -308,14 +308,14 @@ final class AuthGraphQlTest extends WebTestCase
         $password = 'password123';
 
         $register = $this->graphql(<<<'GRAPHQL'
-            mutation($email: String!, $password: String!) {
-              registerUser(input: { email: $email, password: $password }) {
+            mutation($email: String!) {
+              registerUser(input: { email: $email }) {
                 user {
                   email
                 }
               }
             }
-            GRAPHQL, variables: ['email' => $email, 'password' => $password]);
+            GRAPHQL, variables: ['email' => $email]);
         self::assertResponseIsSuccessful();
         self::assertArrayNotHasKey('errors', $register);
         self::assertEmailCount(1);
@@ -324,8 +324,9 @@ final class AuthGraphQlTest extends WebTestCase
         $wrongPassword = $this->loginMutation($email, 'wrong-password');
         $this->assertGraphQlError($wrongPassword, Response::HTTP_UNAUTHORIZED, 'Invalid credentials.');
 
+        // No password is stored until verify-email, so login before verify is always invalid credentials.
         $unverified = $this->loginMutation($email, $password);
-        $this->assertGraphQlError($unverified, Response::HTTP_UNAUTHORIZED, 'Please verify your email before logging in.');
+        $this->assertGraphQlError($unverified, Response::HTTP_UNAUTHORIZED, 'Invalid credentials.');
 
         $verify = $this->graphql(<<<'GRAPHQL'
             mutation($token: String!, $password: String!) {
@@ -402,8 +403,8 @@ final class AuthGraphQlTest extends WebTestCase
     {
         for ($i = 1; $i <= 4; ++$i) {
             $register = $this->graphql(<<<'GRAPHQL'
-                mutation($email: String!, $password: String!) {
-                  registerUser(input: { email: $email, password: $password }) {
+                mutation($email: String!) {
+                  registerUser(input: { email: $email }) {
                     user {
                       email
                     }
@@ -411,7 +412,6 @@ final class AuthGraphQlTest extends WebTestCase
                 }
                 GRAPHQL, variables: [
                 'email' => sprintf('graphql-limit-%d@example.com', $i),
-                'password' => 'password123',
             ]);
             self::assertResponseIsSuccessful();
             self::assertArrayNotHasKey('errors', $register, sprintf('register %d should succeed', $i));
@@ -431,7 +431,7 @@ final class AuthGraphQlTest extends WebTestCase
 
         $blockedRegister = $this->graphql(<<<'GRAPHQL'
             mutation {
-              registerUser(input: { email: "graphql-limit-overflow@example.com", password: "password123" }) {
+              registerUser(input: { email: "graphql-limit-overflow@example.com" }) {
                 user {
                   email
                 }
@@ -474,28 +474,28 @@ final class AuthGraphQlTest extends WebTestCase
         $password = 'password123';
 
         $first = $this->graphql(<<<'GRAPHQL'
-            mutation($email: String!, $password: String!) {
-              registerUser(input: { email: $email, password: $password }) {
+            mutation($email: String!) {
+              registerUser(input: { email: $email }) {
                 user {
                   email
                 }
               }
             }
-            GRAPHQL, variables: ['email' => $email, 'password' => $password]);
+            GRAPHQL, variables: ['email' => $email]);
         self::assertResponseIsSuccessful();
         self::assertArrayNotHasKey('errors', $first);
         self::assertEmailCount(1);
         $verificationToken = $this->extractTokenFromLastEmail();
 
         $duplicate = $this->graphql(<<<'GRAPHQL'
-            mutation($email: String!, $password: String!) {
-              registerUser(input: { email: $email, password: $password }) {
+            mutation($email: String!) {
+              registerUser(input: { email: $email }) {
                 user {
                   email
                 }
               }
             }
-            GRAPHQL, variables: ['email' => strtoupper($email), 'password' => $password]);
+            GRAPHQL, variables: ['email' => strtoupper($email)]);
         $this->assertGraphQlError($duplicate, Response::HTTP_UNPROCESSABLE_ENTITY, 'An account with this email already exists.');
 
         $users = static::getContainer()->get(UserRepository::class);
@@ -580,14 +580,14 @@ final class AuthGraphQlTest extends WebTestCase
     private function registerVerifyAndLogin(string $email, string $password): array
     {
         $this->graphql(<<<'GRAPHQL'
-            mutation($email: String!, $password: String!) {
-              registerUser(input: { email: $email, password: $password }) {
+            mutation($email: String!) {
+              registerUser(input: { email: $email }) {
                 user {
                   email
                 }
               }
             }
-            GRAPHQL, variables: ['email' => $email, 'password' => $password]);
+            GRAPHQL, variables: ['email' => $email]);
         self::assertResponseIsSuccessful();
         self::assertEmailCount(1);
 

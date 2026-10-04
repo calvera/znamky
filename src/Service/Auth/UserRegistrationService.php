@@ -8,7 +8,6 @@ use App\Dto\Auth\RegisterRequest;
 use App\Entity\User;
 use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
-use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Validator\Exception\ValidationFailedException;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
@@ -17,7 +16,6 @@ final class UserRegistrationService
     public function __construct(
         private readonly UserRepository $userRepository,
         private readonly EntityManagerInterface $entityManager,
-        private readonly UserPasswordHasherInterface $passwordHasher,
         private readonly TokenHasher $tokenHasher,
         private readonly AuthMailer $authMailer,
         private readonly ValidatorInterface $validator,
@@ -28,7 +26,6 @@ final class UserRegistrationService
     {
         $user = new User();
         $user->setEmail($request->email);
-        $user->setPassword($this->passwordHasher->hashPassword($user, $request->password));
 
         $violations = $this->validator->validate($user);
         if (\count($violations) > 0) {
