@@ -499,7 +499,6 @@ final class AuthGraphQlTest extends WebTestCase
         $this->assertGraphQlError($duplicate, Response::HTTP_UNPROCESSABLE_ENTITY, 'An account with this email already exists.');
 
         $users = static::getContainer()->get(UserRepository::class);
-        self::assertInstanceOf(UserRepository::class, $users);
         self::assertNotNull($users->findOneByEmail($email));
 
         $verify = $this->graphql(<<<'GRAPHQL'

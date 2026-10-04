@@ -135,8 +135,6 @@ final class AuthTest extends WebTestCase
         self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
 
         $tokens = $this->login($email, $password);
-        self::assertArrayHasKey('token', $tokens);
-        self::assertArrayHasKey('refresh_token', $tokens);
 
         $this->client->request('GET', '/api/me', server: [
             'HTTP_AUTHORIZATION' => 'Bearer '.$tokens['token'],
