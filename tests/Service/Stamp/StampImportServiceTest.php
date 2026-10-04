@@ -133,7 +133,7 @@ final class StampImportServiceTest extends KernelTestCase
     {
         $this->writeCsv('cs-stamps.csv', "\"A\";\"B\"\n\"1\";\"X\"\n");
 
-        $this->expectException(\RuntimeException::class);
+        $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('Číslo');
 
         $this->importService->import($this->fixtureDir);

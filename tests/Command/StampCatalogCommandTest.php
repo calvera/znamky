@@ -107,12 +107,14 @@ final class StampCatalogCommandTest extends KernelTestCase
 
         try {
             $tester = $this->tester('app:stamps:geocode');
-            self::assertSame(Command::FAILURE, $tester->execute([
+            $tester->execute([
                 '--only' => 'countries',
                 '--delay' => '0',
-            ]));
-            self::assertStringContainsString('--only must be one of', $tester->getDisplay());
-            self::assertStringNotContainsString('already running', $tester->getDisplay());
+            ]);
+            self::fail('An unknown --only value must abort before the catalog lock.');
+        } catch (\InvalidArgumentException $e) {
+            self::assertStringContainsString('--only must be one of', $e->getMessage());
+            self::assertStringNotContainsString('already running', $e->getMessage());
         } finally {
             $lock->release();
         }
