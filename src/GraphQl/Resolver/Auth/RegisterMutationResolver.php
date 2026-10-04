@@ -11,6 +11,7 @@ use App\GraphQl\Auth\AuthInputValidator;
 use App\GraphQl\Auth\AuthRateLimiter;
 use App\Service\Auth\UserRegistrationService;
 use Symfony\Component\Validator\Exception\ValidationFailedException;
+use Webmozart\Assert\Assert;
 
 final class RegisterMutationResolver implements MutationResolverInterface
 {
@@ -38,10 +39,7 @@ final class RegisterMutationResolver implements MutationResolverInterface
             $this->inputValidator->convert($exception);
         }
 
-        $id = $user->getId();
-        if (null === $id) {
-            throw new \LogicException('Registered user must have an id.');
-        }
+        $id = Assert::notNull($user->getId(), 'Registered user must have an id.');
 
         return Auth::registered($id, $user->getEmail());
     }

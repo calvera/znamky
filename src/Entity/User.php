@@ -10,6 +10,7 @@ use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Component\Validator\Constraints as Assert;
+use Webmozart\Assert\Assert as WebAssert;
 
 #[ORM\Entity(repositoryClass: UserRepository::class)]
 #[ORM\Table(name: 'users')]
@@ -71,12 +72,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 
     public function setEmail(string $email): static
     {
-        $email = strtolower(trim($email));
-        if ('' === $email) {
-            throw new \InvalidArgumentException('Email cannot be empty.');
-        }
-
-        $this->email = $email;
+        $this->email = WebAssert::stringNotEmpty(strtolower(trim($email)), 'Email cannot be empty.');
 
         return $this;
     }

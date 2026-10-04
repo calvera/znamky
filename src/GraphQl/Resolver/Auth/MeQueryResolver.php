@@ -9,6 +9,7 @@ use App\ApiResource\Auth;
 use App\Entity\User;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Webmozart\Assert\Assert;
 
 final class MeQueryResolver implements QueryItemResolverInterface
 {
@@ -24,10 +25,7 @@ final class MeQueryResolver implements QueryItemResolverInterface
             throw new AccessDeniedHttpException('Access Denied.');
         }
 
-        $id = $user->getId();
-        if (null === $id) {
-            throw new \LogicException('Authenticated user must have an id.');
-        }
+        $id = Assert::notNull($user->getId(), 'Authenticated user must have an id.');
 
         return Auth::me($id, $user->getEmail(), $user->getRoles());
     }

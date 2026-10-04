@@ -12,6 +12,7 @@ use App\Service\Auth\LogoutService;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Webmozart\Assert\Assert;
 
 final class LogoutMutationResolver implements MutationResolverInterface
 {
@@ -30,10 +31,10 @@ final class LogoutMutationResolver implements MutationResolverInterface
             throw new AccessDeniedHttpException('Access Denied.');
         }
 
-        $request = $this->requestStack->getCurrentRequest();
-        if (null === $request) {
-            throw new \LogicException('Logout requires an HTTP request.');
-        }
+        $request = Assert::notNull(
+            $this->requestStack->getCurrentRequest(),
+            'Logout requires an HTTP request.',
+        );
 
         $input = $this->inputValidator->input($context);
         $refreshToken = $input['refreshToken'] ?? null;

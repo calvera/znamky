@@ -14,6 +14,7 @@ use App\Repository\StampRepository;
 use App\Repository\StampTagRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\String\Slugger\SluggerInterface;
+use Webmozart\Assert\Assert;
 
 final class StampImportService
 {
@@ -40,10 +41,7 @@ final class StampImportService
      */
     public function import(string $directory, bool $purge = false): array
     {
-        $directory = rtrim($directory, '/\\');
-        if (!is_dir($directory)) {
-            throw new \InvalidArgumentException(sprintf('Import directory does not exist: "%s".', $directory));
-        }
+        $directory = Assert::directory(rtrim($directory, '/\\'), 'Import directory does not exist: "%s".');
 
         if ($purge) {
             $this->purgeCatalog();
@@ -100,9 +98,7 @@ final class StampImportService
     private function importFile(string $path, StampCountry $defaultCountry, StampType $defaultType): int
     {
         $handle = fopen($path, 'rb');
-        if (false === $handle) {
-            throw new \RuntimeException(sprintf('Unable to open CSV file: "%s".', $path));
-        }
+        Assert::notFalse($handle, sprintf('Unable to open CSV file: "%s".', $path));
 
         try {
             $header = fgetcsv($handle, length: 0, separator: ';', enclosure: '"', escape: '\\');
@@ -239,9 +235,8 @@ final class StampImportService
             }
         }
 
-        if (!isset($indexes['Číslo'], $indexes['Název'])) {
-            throw new \RuntimeException('CSV is missing required Číslo/Název columns.');
-        }
+        Assert::keyExists($indexes, 'Číslo', 'CSV is missing required Číslo/Název columns.');
+        Assert::keyExists($indexes, 'Název', 'CSV is missing required Číslo/Název columns.');
 
         return $indexes;
     }

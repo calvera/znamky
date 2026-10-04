@@ -13,6 +13,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Lock\LockFactory;
+use Webmozart\Assert\Assert;
 
 #[AsCommand(
     name: 'app:stamps:import',
@@ -53,14 +54,7 @@ final class ImportStampsCommand extends Command
         }
 
         try {
-            $pathOption = $input->getOption('path');
-            if (!\is_string($pathOption)) {
-                $io->error('--path must be a string');
-
-                return Command::FAILURE;
-            }
-
-            $path = $pathOption;
+            $path = Assert::string($input->getOption('path'), '--path must be a string');
             if (!str_starts_with($path, '/')) {
                 $path = $this->projectDir.\DIRECTORY_SEPARATOR.$path;
             }

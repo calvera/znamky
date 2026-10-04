@@ -7,6 +7,7 @@ namespace App\Service\Stamp;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
+use Webmozart\Assert\Assert;
 
 #[AsAlias(GeocoderInterface::class)]
 final class GoogleGeocoder implements GeocoderInterface
@@ -27,9 +28,7 @@ final class GoogleGeocoder implements GeocoderInterface
             return null;
         }
 
-        if ('' === $this->apiKey) {
-            throw new \RuntimeException('GOOGLE_MAPS_API_KEY is not configured.');
-        }
+        Assert::stringNotEmpty($this->apiKey, 'GOOGLE_MAPS_API_KEY is not configured.');
 
         $response = $this->httpClient->request('GET', self::ENDPOINT, [
             'query' => [

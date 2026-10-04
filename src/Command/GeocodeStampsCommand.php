@@ -12,6 +12,7 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\Lock\LockFactory;
+use Webmozart\Assert\Assert;
 
 #[AsCommand(
     name: 'app:stamps:geocode',
@@ -40,29 +41,14 @@ final class GeocodeStampsCommand extends Command
     {
         $io = new SymfonyStyle($input, $output);
 
-        $onlyOption = $input->getOption('only');
-        if (!\is_string($onlyOption)) {
-            $io->error('--only must be a string');
-
-            return Command::FAILURE;
-        }
+        $only = Assert::string($input->getOption('only'), '--only must be a string');
+        Assert::inArray($only, ['stamps', 'places', 'all'], '--only must be one of: stamps, places, all');
 
         $delayOption = $input->getOption('delay');
-        if (!\is_int($delayOption) && !(\is_string($delayOption) && is_numeric($delayOption))) {
-            $io->error('--delay must be an integer');
+        Assert::integerish($delayOption, '--delay must be an integer');
 
-            return Command::FAILURE;
-        }
-
-        $only = $onlyOption;
         $force = true === $input->getOption('force');
         $delayMs = max(0, (int) $delayOption);
-
-        if (!\in_array($only, ['stamps', 'places', 'all'], true)) {
-            $io->error('--only must be one of: stamps, places, all');
-
-            return Command::FAILURE;
-        }
 
         $lock = $this->lockFactory->createLock(self::LOCK_RESOURCE);
         if (!$lock->acquire()) {

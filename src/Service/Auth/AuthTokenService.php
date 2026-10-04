@@ -20,6 +20,7 @@ use Symfony\Component\HttpKernel\Exception\UnauthorizedHttpException;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Security\Http\RateLimiter\DefaultLoginRateLimiter;
 use Symfony\Component\Security\Http\SecurityRequestAttributes;
+use Webmozart\Assert\Assert;
 
 final class AuthTokenService
 {
@@ -43,10 +44,10 @@ final class AuthTokenService
      */
     public function login(string $email, string $password): array
     {
-        $request = $this->requestStack->getCurrentRequest();
-        if (null === $request) {
-            throw new \LogicException('Login requires an HTTP request.');
-        }
+        $request = Assert::notNull(
+            $this->requestStack->getCurrentRequest(),
+            'Login requires an HTTP request.',
+        );
 
         $request->attributes->set(SecurityRequestAttributes::LAST_USERNAME, $email);
         $limit = $this->loginRateLimiter->consume($request);
