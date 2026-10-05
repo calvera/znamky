@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace App\Tests\Api;
 
+use App\Entity\User;
 use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\MailerAssertionsTrait;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 
 final class AuthGraphQlTest extends WebTestCase
 {
@@ -572,6 +574,128 @@ final class AuthGraphQlTest extends WebTestCase
         $newLogin = $this->loginMutation($email, $newPassword);
         self::assertResponseIsSuccessful();
         self::assertArrayNotHasKey('errors', $newLogin);
+    }
+
+    public function testRegisterRejectsAPasswordArgument(): void
+    {
+        $email = 'graphql-leftover@example.com';
+
+        $rejected = $this->graphql(<<<'GRAPHQL'
+            mutation($email: String!, $password: String!) {
+              registerUser(input: { email: $email, password: $password }) {
+                user {
+                  email
+                }
+              }
+            }
+            GRAPHQL, variables: ['email' => $email, 'password' => 'attacker-password']);
+
+        self::assertArrayHasKey('errors', $rejected);
+        self::assertNull($this->users()->findOneByEmail($email));
+
+        $register = $this->graphql(<<<'GRAPHQL'
+            mutation($email: String!) {
+              registerUser(input: { email: $email }) {
+                user {
+                  email
+                }
+              }
+            }
+            GRAPHQL, variables: ['email' => $email]);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $register);
+
+        $user = $this->users()->findOneByEmail($email);
+        self::assertInstanceOf(User::class, $user);
+        self::assertSame('', $user->getPassword());
+    }
+
+    public function testResetOnUnverifiedAccountStoresPasswordButBlocksLogin(): void
+    {
+        $email = 'graphql-unverified-reset@example.com';
+        $resetPassword = 'resetpassword1';
+        $verificationPassword = 'chosen-by-inbox';
+
+        $register = $this->graphql(<<<'GRAPHQL'
+            mutation($email: String!) {
+              registerUser(input: { email: $email }) {
+                user {
+                  email
+                }
+              }
+            }
+            GRAPHQL, variables: ['email' => $email]);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $register);
+        $verificationToken = $this->extractTokenFromLastEmail();
+
+        $forgot = $this->graphql(<<<'GRAPHQL'
+            mutation($email: String!) {
+              forgotPasswordUser(input: { email: $email }) {
+                user {
+                  success
+                }
+              }
+            }
+            GRAPHQL, variables: ['email' => $email]);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $forgot);
+        $resetToken = $this->extractTokenFromLastEmail();
+
+        $reset = $this->graphql(<<<'GRAPHQL'
+            mutation($token: String!, $password: String!) {
+              resetPasswordUser(input: { token: $token, password: $password }) {
+                user {
+                  success
+                }
+              }
+            }
+            GRAPHQL, variables: ['token' => $resetToken, 'password' => $resetPassword]);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $reset);
+
+        $user = $this->users()->findOneByEmail($email);
+        self::assertInstanceOf(User::class, $user);
+        self::assertFalse($user->isVerified());
+        self::assertTrue($this->hasher()->isPasswordValid($user, $resetPassword));
+
+        $blocked = $this->loginMutation($email, $resetPassword);
+        $this->assertGraphQlError($blocked, Response::HTTP_UNAUTHORIZED, 'Please verify your email before logging in.');
+
+        $wrong = $this->loginMutation($email, 'not-the-reset-password');
+        $this->assertGraphQlError($wrong, Response::HTTP_UNAUTHORIZED, 'Invalid credentials.');
+
+        $verify = $this->graphql(<<<'GRAPHQL'
+            mutation($token: String!, $password: String!) {
+              verifyEmailUser(input: { token: $token, password: $password }) {
+                user {
+                  success
+                }
+              }
+            }
+            GRAPHQL, variables: [
+            'token' => $verificationToken,
+            'password' => $verificationPassword,
+        ]);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $verify);
+
+        $oldLogin = $this->loginMutation($email, $resetPassword);
+        $this->assertGraphQlError($oldLogin, Response::HTTP_UNAUTHORIZED, 'Invalid credentials.');
+
+        $login = $this->loginMutation($email, $verificationPassword);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $login);
+    }
+
+    private function users(): UserRepository
+    {
+        return static::getContainer()->get(UserRepository::class);
+    }
+
+    private function hasher(): UserPasswordHasherInterface
+    {
+        return static::getContainer()->get(UserPasswordHasherInterface::class);
     }
 
     /**
