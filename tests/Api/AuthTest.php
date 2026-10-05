@@ -328,6 +328,45 @@ final class AuthTest extends WebTestCase
         $this->login($email, $ownerPassword);
     }
 
+    public function testRegisterIgnoresAPasswordInTheBody(): void
+    {
+        $email = 'leftover-password@example.com';
+        $registrationPassword = 'attacker-password';
+        $ownerPassword = 'owner-password-1';
+
+        $this->jsonRequest('POST', '/api/register', [
+            'email' => $email,
+            'password' => $registrationPassword,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
+        $verificationToken = $this->extractTokenFromLastEmail();
+
+        $user = static::getContainer()->get(UserRepository::class)->findOneByEmail($email);
+        self::assertInstanceOf(User::class, $user);
+        self::assertSame('', $user->getPassword());
+        self::assertFalse($user->isVerified());
+
+        $this->jsonRequest('POST', '/api/login', [
+            'email' => $email,
+            'password' => $registrationPassword,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+
+        $this->jsonRequest('POST', '/api/verify-email', [
+            'token' => $verificationToken,
+            'password' => $ownerPassword,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+
+        $this->jsonRequest('POST', '/api/login', [
+            'email' => $email,
+            'password' => $registrationPassword,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+
+        $this->login($email, $ownerPassword);
+    }
+
     public function testVerifyWithoutPasswordLeavesAccountUnverified(): void
     {
         $email = 'pending@example.com';
@@ -644,11 +683,19 @@ final class AuthTest extends WebTestCase
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
 
+        $user = static::getContainer()->get(UserRepository::class)->findOneByEmail($email);
+        self::assertInstanceOf(User::class, $user);
+        self::assertFalse($user->isVerified());
+        self::assertTrue(static::getContainer()->get(UserPasswordHasherInterface::class)->isPasswordValid($user, $newPassword));
+
         $this->jsonRequest('POST', '/api/login', [
             'email' => $email,
             'password' => $newPassword,
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+        $message = $this->jsonResponse()['message'] ?? null;
+        self::assertIsString($message);
+        self::assertStringContainsString('Please verify your email', $message);
 
         $this->jsonRequest('POST', '/api/verify-email', [
             'token' => $verificationToken,

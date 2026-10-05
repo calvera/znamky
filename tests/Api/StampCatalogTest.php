@@ -170,6 +170,158 @@ final class StampCatalogTest extends WebTestCase
         self::assertSame('Praděd výroční', $this->jsonResponse()['name'] ?? null);
     }
 
+    public function testSortWhitelistAndExactCatalogFilters(): void
+    {
+        $headers = [
+            'HTTP_AUTHORIZATION' => 'Bearer '.$this->authenticate(),
+            'HTTP_ACCEPT' => 'application/ld+json',
+        ];
+
+        $this->client->request('GET', '/api/stamps?order%5Bname%5D=asc', server: $headers);
+        self::assertResponseIsSuccessful();
+        $notOrderedByName = $this->members();
+        self::assertSame('Praděd', $notOrderedByName[0]['name'] ?? null);
+        self::assertSame('Kriváň', $notOrderedByName[1]['name'] ?? null);
+
+        $this->client->request('GET', '/api/stamps?order%5Bnumber%5D=ASC', server: $headers);
+        self::assertResponseIsSuccessful();
+        $ordered = $this->members();
+        self::assertSame(1, $ordered[0]['number'] ?? null);
+
+        $this->client->request('GET', '/api/stamp_tags?slug=hory', server: $headers);
+        self::assertResponseIsSuccessful();
+        $exactSlug = $this->members();
+        self::assertCount(1, $exactSlug);
+        self::assertSame('Hory', $exactSlug[0]['name'] ?? null);
+
+        $this->client->request('GET', '/api/stamp_tags?slug=hor', server: $headers);
+        self::assertResponseIsSuccessful();
+        self::assertSame([], $this->members());
+
+        $this->client->request('GET', '/api/stamp_tags?name=Hor', server: $headers);
+        self::assertResponseIsSuccessful();
+        $partialName = $this->members();
+        self::assertCount(1, $partialName);
+        self::assertSame('Hory', $partialName[0]['name'] ?? null);
+
+        $this->client->request('GET', '/api/stamp_places?name=Chat', server: $headers);
+        self::assertResponseIsSuccessful();
+        $places = $this->members();
+        self::assertCount(1, $places);
+        self::assertSame('Chatová služba', $places[0]['name'] ?? null);
+
+        $this->client->request('GET', '/api/stamp_places?name=Nope', server: $headers);
+        self::assertResponseIsSuccessful();
+        self::assertSame([], $this->members());
+
+        $this->client->request('GET', '/api/stamp_tags?not_a_real_param=1', server: $headers);
+        self::assertResponseStatusCodeSame(Response::HTTP_BAD_REQUEST);
+
+        $this->client->request('GET', '/api/stamp_places?not_a_real_param=1', server: $headers);
+        self::assertResponseStatusCodeSame(Response::HTTP_BAD_REQUEST);
+    }
+
+    public function testCoordinatesRoundToSevenDecimalsAndSerializeAsNumbers(): void
+    {
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $stamp = $em->getRepository(Stamp::class)->findOneBy([
+            'country' => StampCountry::Cz,
+            'type' => StampType::Regular,
+            'number' => 1,
+        ]);
+        $place = $em->getRepository(StampPlace::class)->findOneBy(['name' => 'Chatová služba']);
+        self::assertInstanceOf(Stamp::class, $stamp);
+        self::assertInstanceOf(StampPlace::class, $place);
+
+        $stampLatitude = 50.123456789;
+        $stampLongitude = -14.987654321;
+        $placeLatitude = 49.00000015;
+        $expectedStampLatitude = \sprintf('%.7F', $stampLatitude);
+        $expectedStampLongitude = \sprintf('%.7F', $stampLongitude);
+        $expectedPlaceLatitude = \sprintf('%.7F', $placeLatitude);
+        self::assertMatchesRegularExpression('/^-?\d+\.\d{7}$/', $expectedStampLatitude);
+        self::assertMatchesRegularExpression('/^-?\d+\.\d{7}$/', $expectedStampLongitude);
+        self::assertMatchesRegularExpression('/^-?\d+\.\d{7}$/', $expectedPlaceLatitude);
+
+        $stamp->setLatitude($stampLatitude)->setLongitude($stampLongitude);
+        $place->setLatitude($placeLatitude)->setLongitude(null);
+        $em->flush();
+        $stampId = $stamp->getId();
+        $placeId = $place->getId();
+        self::assertNotNull($stampId);
+        self::assertNotNull($placeId);
+        $em->clear();
+
+        $connection = $em->getConnection();
+        $storedStampLat = $connection->fetchOne('SELECT latitude FROM stamps WHERE id = ?', [$stampId]);
+        $storedStampLng = $connection->fetchOne('SELECT longitude FROM stamps WHERE id = ?', [$stampId]);
+        $storedPlaceLat = $connection->fetchOne('SELECT latitude FROM stamp_places WHERE id = ?', [$placeId]);
+        $storedPlaceLng = $connection->fetchOne('SELECT longitude FROM stamp_places WHERE id = ?', [$placeId]);
+        self::assertSame($expectedStampLatitude, $storedStampLat);
+        self::assertSame($expectedStampLongitude, $storedStampLng);
+        self::assertSame($expectedPlaceLatitude, $storedPlaceLat);
+        self::assertNull($storedPlaceLng);
+
+        $headers = [
+            'HTTP_AUTHORIZATION' => 'Bearer '.$this->authenticate(),
+            'HTTP_ACCEPT' => 'application/ld+json',
+        ];
+        $this->client->request('GET', '/api/stamps/'.$stampId, server: $headers);
+        self::assertResponseIsSuccessful();
+        $item = $this->jsonResponse();
+        $this->assertJsonNumber($item['latitude'] ?? null, (float) $expectedStampLatitude);
+        $this->assertJsonNumber($item['longitude'] ?? null, (float) $expectedStampLongitude);
+        self::assertDoesNotMatchRegularExpression(
+            '/"latitude"\s*:\s*"/',
+            (string) $this->client->getResponse()->getContent(),
+        );
+
+        $places = $item['places'] ?? null;
+        self::assertIsArray($places);
+        $embedded = $this->embeddedPlace($places);
+        if (null === $embedded) {
+            $this->client->request('GET', '/api/stamp_places/'.$placeId, server: $headers);
+            self::assertResponseIsSuccessful();
+            $embedded = $this->jsonResponse();
+        }
+        $this->assertJsonNumber($embedded['latitude'] ?? null, (float) $expectedPlaceLatitude);
+        self::assertNull($embedded['longitude'] ?? null);
+    }
+
+    private function assertJsonNumber(mixed $value, float $expected): void
+    {
+        self::assertIsFloat($value);
+        self::assertEqualsWithDelta($expected, $value, 0.00000005);
+    }
+
+    /**
+     * @param array<mixed> $places
+     *
+     * @return array<string, mixed>|null
+     */
+    private function embeddedPlace(array $places): ?array
+    {
+        foreach ($places as $place) {
+            if (!\is_array($place)) {
+                continue;
+            }
+            if (\array_key_exists('latitude', $place)) {
+                $embedded = [];
+                foreach ($place as $key => $value) {
+                    if (!\is_string($key)) {
+                        self::fail('Expected place keys to be strings.');
+                    }
+                    $embedded[$key] = $value;
+                }
+
+                return $embedded;
+            }
+        }
+
+        return null;
+    }
+
     private function authenticate(): string
     {
         $email = 'stamps@example.com';

@@ -119,6 +119,126 @@ final class StampGraphQlTest extends WebTestCase
         self::assertContains('loginUser', $mutationFields);
     }
 
+    public function testFiltersAndRoundedCoordinates(): void
+    {
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $latitude = 50.123456789;
+        $longitude = -14.987654321;
+        $em->persist((new Stamp())
+            ->setCountry(StampCountry::Cz)
+            ->setType(StampType::Annual)
+            ->setNumber(9)
+            ->setName('Praděd výroční')
+            ->setLatitude($latitude)
+            ->setLongitude($longitude));
+        $em->flush();
+        $em->clear();
+
+        $token = $this->authenticate();
+
+        $rounded = $this->graphql(<<<'GRAPHQL'
+            {
+              stamps(country: "CZ", type: "annual", number: "9") {
+                edges {
+                  node {
+                    name
+                    latitude
+                    longitude
+                  }
+                }
+              }
+            }
+            GRAPHQL, $token);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $rounded);
+        $node = $this->firstStampNode($rounded);
+        self::assertSame('Praděd výroční', $node['name'] ?? null);
+        self::assertSame(\sprintf('%.7F', $latitude), $node['latitude'] ?? null);
+        self::assertSame(\sprintf('%.7F', $longitude), $node['longitude'] ?? null);
+
+        $exactSlug = $this->graphql(<<<'GRAPHQL'
+            { stampTags(slug: "hory") { edges { node { name } } } }
+            GRAPHQL, $token);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $exactSlug);
+        self::assertSame(['Hory'], $this->nodeNames($exactSlug, 'stampTags'));
+
+        $prefixSlug = $this->graphql(<<<'GRAPHQL'
+            { stampTags(slug: "hor") { edges { node { name } } } }
+            GRAPHQL, $token);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $prefixSlug);
+        self::assertSame([], $this->nodeNames($prefixSlug, 'stampTags'));
+
+        $places = $this->graphql(<<<'GRAPHQL'
+            { stampPlaces(name: "Chat") { edges { node { name } } } }
+            GRAPHQL, $token);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $places);
+        self::assertSame(['Chatová služba'], $this->nodeNames($places, 'stampPlaces'));
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     *
+     * @return array<string, mixed>
+     */
+    private function firstStampNode(array $payload): array
+    {
+        $nodes = $this->nodes($payload, 'stamps');
+        $node = $nodes[0] ?? null;
+        if (null === $node) {
+            self::fail('Expected a stamp node.');
+        }
+
+        return $node;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     *
+     * @return list<string>
+     */
+    private function nodeNames(array $payload, string $field): array
+    {
+        $names = [];
+        foreach ($this->nodes($payload, $field) as $node) {
+            $name = $node['name'] ?? null;
+            if (!\is_string($name)) {
+                self::fail('Expected node name to be a string.');
+            }
+            $names[] = $name;
+        }
+
+        return $names;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function nodes(array $payload, string $field): array
+    {
+        $data = $this->stringKeyedArray($payload['data'] ?? null, 'GraphQL data');
+        $connection = $this->stringKeyedArray($data[$field] ?? null, 'GraphQL '.$field);
+        $edges = $connection['edges'] ?? null;
+        if (!\is_array($edges)) {
+            self::fail('Expected GraphQL edges array.');
+        }
+
+        $nodes = [];
+        foreach ($edges as $edge) {
+            if (!\is_array($edge)) {
+                self::fail('Expected GraphQL edge to be an array.');
+            }
+            $nodes[] = $this->stringKeyedArray($edge['node'] ?? null, 'GraphQL node');
+        }
+
+        return $nodes;
+    }
+
     /**
      * @return array<string, mixed>
      */
