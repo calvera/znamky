@@ -1,0 +1,19 @@
+artprima_prometheus_metrics:
+    namespace: znamky
+    storage: '%env(PROM_METRICS_DSN)%'
+
+    ignored_routes:
+        - prometheus_bundle_prometheus
+        - _wdt
+
+    # Recommended to disable default metrics from promphp/prometheus_client_php
+    # see https://github.com/PromPHP/prometheus_client_php/issues/62
+    disable_default_promphp_metrics: true
+
+    enable_console_metrics: true
+
+# Default PROM_METRICS_DSN=in_memory works without ext-apcu (local CLI / tests).
+# Docker prod sets PROM_METRICS_DSN=apcu (see Dockerfile).
+when@test:
+    artprima_prometheus_metrics:
+        storage: in_memory

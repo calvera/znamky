@@ -28,6 +28,22 @@ Sentry is enabled only in production (`APP_ENV=prod`). Set `SENTRY_DSN` in
 production (or `.env.local` when testing prod locally) to report uncaught
 exceptions and Monolog `error` records; dev and test never send to Sentry.
 
+Prometheus metrics are at `GET /metrics/prometheus` (unauthenticated; restrict
+at the network layer in production). Storage is controlled by `PROM_METRICS_DSN`
+(`in_memory` by default; Docker prod sets `apcu`). Example scrape job:
+
+```yaml
+scrape_configs:
+  - job_name: znamky
+    metrics_path: /metrics/prometheus
+    static_configs:
+      - targets: ['app:80']
+```
+
+Import Grafana dashboards from
+`vendor/artprima/prometheus-metrics-bundle/grafana/` and set the namespace
+template variable to `znamky`.
+
 ## Documentation
 
 | Doc | Description |
@@ -122,3 +138,4 @@ Pushing a `v*` git tag builds and publishes to GHCR
 - Stamp catalog import + Google Geocoding (`symfony/http-client`)
 - `symfony/lock` for stamp import/geocode mutual exclusion
 - Sentry (`sentry/sentry-symfony`) for production exception reporting
+- Prometheus metrics (`artprima/prometheus-metrics-bundle`) at `/metrics/prometheus`

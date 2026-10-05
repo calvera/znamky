@@ -53,6 +53,7 @@ FROM base AS prod
 
 ENV APP_ENV=prod
 ENV APP_DEBUG=0
+ENV PROM_METRICS_DSN=apcu
 
 RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
 
