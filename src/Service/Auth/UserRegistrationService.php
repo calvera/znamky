@@ -8,6 +8,7 @@ use App\Dto\Auth\RegisterRequest;
 use App\Entity\User;
 use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
+use Safe\DateTimeImmutable;
 use Symfony\Component\Validator\Exception\ValidationFailedException;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
@@ -34,7 +35,7 @@ final class UserRegistrationService
 
         $rawToken = $this->tokenHasher->generate();
         $user->setEmailVerificationToken($this->tokenHasher->hash($rawToken));
-        $user->setEmailVerificationTokenExpiresAt(new \DateTimeImmutable('+1 day'));
+        $user->setEmailVerificationTokenExpiresAt(new DateTimeImmutable('+1 day'));
         $user->setIsVerified(false);
 
         // The raw token exists only in the email. Commit the account only after

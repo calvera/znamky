@@ -11,6 +11,7 @@ use App\Service\Auth\PasswordResetService;
 use App\Service\Auth\TokenHasher;
 use Doctrine\ORM\EntityManagerInterface;
 use Gesdinet\JWTRefreshTokenBundle\Model\RevokeRefreshTokenManagerInterface;
+use Safe\DateTimeImmutable;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\MailerAssertionsTrait;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
@@ -778,7 +779,7 @@ final class AuthTest extends WebTestCase
     public function testIssuedAuthTokensExpireOnTheirExpectedWindows(): void
     {
         $email = 'token-lifetime@example.com';
-        $registeredAt = new \DateTimeImmutable();
+        $registeredAt = new DateTimeImmutable();
         $this->jsonRequest('POST', '/api/register', [
             'email' => $email,
         ]);
@@ -795,7 +796,7 @@ final class AuthTest extends WebTestCase
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
 
-        $requestedAt = new \DateTimeImmutable();
+        $requestedAt = new DateTimeImmutable();
         $this->jsonRequest('POST', '/api/forgot-password', ['email' => $email]);
         self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
 
@@ -958,9 +959,9 @@ final class AuthTest extends WebTestCase
         $user = $this->findUser($email);
 
         if ('emailVerificationTokenExpiresAt' === $field) {
-            $user->setEmailVerificationTokenExpiresAt(new \DateTimeImmutable('-1 minute'));
+            $user->setEmailVerificationTokenExpiresAt(new DateTimeImmutable('-1 minute'));
         } else {
-            $user->setPasswordResetTokenExpiresAt(new \DateTimeImmutable('-1 minute'));
+            $user->setPasswordResetTokenExpiresAt(new DateTimeImmutable('-1 minute'));
         }
 
         $em->flush();

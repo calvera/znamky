@@ -38,6 +38,7 @@
         "symfony/twig-bundle": "8.1.*",
         "symfony/validator": "8.1.*",
         "symfony/yaml": "8.1.*",
+        "thecodingmachine/safe": "^3.4",
         "webmozart/assert": "^2.4"
     },
     "config": {
@@ -111,6 +112,7 @@
         "phpstan/phpstan-webmozart-assert": "^2.0",
         "phpunit/phpunit": "^13.3",
         "symfony/browser-kit": "8.1.*",
-        "symfony/css-selector": "8.1.*"
+        "symfony/css-selector": "8.1.*",
+        "thecodingmachine/phpstan-safe-rule": "^1.4"
     }
 }

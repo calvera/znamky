@@ -15,6 +15,8 @@ use Symfony\Bundle\FrameworkBundle\Test\MailerAssertionsTrait;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\HttpFoundation\Response;
 
+use function Safe\parse_url;
+
 final class StampCatalogTest extends WebTestCase
 {
     use EmailTokenTestTrait;

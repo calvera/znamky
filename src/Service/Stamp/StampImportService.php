@@ -16,6 +16,10 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\String\Slugger\SluggerInterface;
 use Webmozart\Assert\Assert;
 
+use function Safe\fclose;
+use function Safe\fgetcsv;
+use function Safe\fopen;
+
 final class StampImportService
 {
     private const BATCH_SIZE = 100;
@@ -98,7 +102,6 @@ final class StampImportService
     private function importFile(string $path, StampCountry $defaultCountry, StampType $defaultType): int
     {
         $handle = fopen($path, 'rb');
-        Assert::notFalse($handle, sprintf('Unable to open CSV file: "%s".', $path));
 
         try {
             $header = fgetcsv($handle, length: 0, separator: ';', enclosure: '"', escape: '\\');
@@ -106,12 +109,14 @@ final class StampImportService
                 return 0;
             }
 
+            $header = $this->normalizeCsvRow($header);
             $header[0] = $this->stripBom((string) $header[0]);
             $header = array_map(static fn (?string $h): string => trim((string) $h, " \t\n\r\0\x0B\""), $header);
             $indexes = $this->mapIndexes($header);
 
             $count = 0;
-            while (false !== ($row = fgetcsv($handle, length: 0, separator: ';', enclosure: '"', escape: '\\'))) {
+            while (false !== ($rawRow = fgetcsv($handle, length: 0, separator: ';', enclosure: '"', escape: '\\'))) {
+                $row = $this->normalizeCsvRow($rawRow);
                 if ($this->isEmptyRow($row)) {
                     continue;
                 }
@@ -131,6 +136,19 @@ final class StampImportService
         } finally {
             fclose($handle);
         }
+    }
+
+    /**
+     * @param array<mixed> $row
+     *
+     * @return list<?string>
+     */
+    private function normalizeCsvRow(array $row): array
+    {
+        $values = array_values($row);
+        Assert::allNullOrString($values);
+
+        return $values;
     }
 
     /**

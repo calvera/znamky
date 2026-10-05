@@ -15,6 +15,12 @@ use App\Service\Stamp\StampImportService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
+use function Safe\file_put_contents;
+use function Safe\glob;
+use function Safe\mkdir;
+use function Safe\rmdir;
+use function Safe\unlink;
+
 final class StampImportServiceTest extends KernelTestCase
 {
     private EntityManagerInterface $em;
@@ -49,7 +55,10 @@ final class StampImportServiceTest extends KernelTestCase
 
     protected function tearDown(): void
     {
-        foreach (glob($this->fixtureDir.'/*') ?: [] as $file) {
+        foreach (glob($this->fixtureDir.'/*') as $file) {
+            if (!\is_string($file)) {
+                continue;
+            }
             unlink($file);
         }
         rmdir($this->fixtureDir);

@@ -15,6 +15,8 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Lock\LockFactory;
 use Webmozart\Assert\Assert;
 
+use function Safe\ini_set;
+
 #[AsCommand(
     name: 'app:stamps:import',
     description: 'Import tourist stamps from CSV files under data/',

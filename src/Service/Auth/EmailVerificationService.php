@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Service\Auth;
 
 use App\Repository\UserRepository;
+use Safe\DateTimeImmutable;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 
@@ -28,7 +29,7 @@ final class EmailVerificationService
         }
 
         $expiresAt = $user->getEmailVerificationTokenExpiresAt();
-        if (null === $expiresAt || $expiresAt < new \DateTimeImmutable()) {
+        if (null === $expiresAt || $expiresAt < new DateTimeImmutable()) {
             throw new UnprocessableEntityHttpException('Verification token has expired.');
         }
 

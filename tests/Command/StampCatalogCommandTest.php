@@ -21,6 +21,12 @@ use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\LockInterface;
 
+use function Safe\file_put_contents;
+use function Safe\glob;
+use function Safe\mkdir;
+use function Safe\rmdir;
+use function Safe\unlink;
+
 final class StampCatalogCommandTest extends KernelTestCase
 {
     private EntityManagerInterface $em;
@@ -301,7 +307,10 @@ CSV);
 
     private function removeDirectory(string $dir): void
     {
-        foreach (glob($dir.'/*') ?: [] as $file) {
+        foreach (glob($dir.'/*') as $file) {
+            if (!\is_string($file)) {
+                continue;
+            }
             unlink($file);
         }
         rmdir($dir);

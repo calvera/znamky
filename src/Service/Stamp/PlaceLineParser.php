@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Service\Stamp;
 
+use function Safe\preg_match;
+use function Safe\preg_split;
+
 /**
  * Parses "Prodejní místa (název a web)" CSV cells into name + optional URL pairs.
  */
@@ -18,10 +21,14 @@ final class PlaceLineParser
             return [];
         }
 
-        $lines = preg_split('/\R/u', $cell) ?: [];
+        $lines = preg_split('/\R/u', $cell);
         $places = [];
 
         foreach ($lines as $line) {
+            if (!\is_string($line)) {
+                continue;
+            }
+
             $line = trim($line);
             if ('' === $line) {
                 continue;
