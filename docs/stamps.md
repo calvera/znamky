@@ -61,6 +61,56 @@ Service: `App\Service\Stamp\StampImportService` (uses
 `App\Service\Stamp\PlaceLineParser` and injected `SluggerInterface` for tag
 slugs).
 
+## Web scrape (JSON + images)
+
+Mirror the public catalog from [turisticke-znamky.cz](https://turisticke-znamky.cz)
+to disk. This does **not** write to Doctrine; mapping into `Stamp` /
+`StampTag` / `StampPlace` is a later step.
+
+```bash
+php bin/console app:stamps:scrape-web --no-debug
+# smoke (narrow + faster pauses):
+php bin/console app:stamps:scrape-web --country=1 --type=0 --limit=5 --delay-detail=200
+```
+
+Default output: `data/tz-web/` (gitignored).
+
+```
+data/tz-web/
+  scrape-meta.json
+  index.jsonl
+  stamps/{id}/stamp.json          # full site item + `_scrape` metadata
+  stamps/{id}/images/current/…    # archive == 0
+  stamps/{id}/images/archive/…    # archive == 1 (history)
+```
+
+Discovery walks every country × type via `/items/lazy` (unfiltered listing
+defaults to CZ type=0). Detail pages are `/items/{id}` (Inertia `data-page`).
+Images: `/storage/item_images/medium/{src}`.
+
+Polite defaults (override with `--delay-*`):
+
+| Pause | Default |
+|-------|---------|
+| After detail | 800 ms ±20% jitter |
+| After list page | 400 ms ± jitter |
+| After image | 150 ms ± jitter |
+| Every 50 details | 5 s |
+| Between country/type buckets | 2 s |
+
+HTTP reliability:
+
+| Option | Default | Meaning |
+|--------|---------|---------|
+| `--timeout` | 30 s | Per-request `timeout` + `max_duration` |
+| `--retries` | 3 | Retries after timeout / transport / other 5xx |
+| `--rate-limit-retries` | 5 | Retries after HTTP 429 / 503 |
+
+On HTTP 429/503: honor `Retry-After` or exponential backoff from 30 s (cap 5
+min). Existing `stamp.json` is skipped unless `--force` (resume-safe).
+
+Service: `App\Service\Stamp\StampWebScrapeService`.
+
 ## Geocoding
 
 Requires `GOOGLE_MAPS_API_KEY` in `.env.local` (empty default in `.env`).

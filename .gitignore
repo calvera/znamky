@@ -24,6 +24,9 @@
 /.php-cs-fixer.cache
 ###< friendsofphp/php-cs-fixer ###
 
+# Scraped dump from turisticke-znamky.cz (app:stamps:scrape-web)
+/data/tz-web/
+
 ###> phpstan/phpstan ###
 /phpstan.neon
 ###< phpstan/phpstan ###
