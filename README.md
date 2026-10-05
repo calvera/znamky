@@ -24,6 +24,10 @@ symfony serve -d   # or: php -S 127.0.0.1:8000 -t public
 Useful env defaults live in `.env`. Override secrets in `.env.local` (never commit
 them) — including `APP_SECRET`, `JWT_PASSPHRASE`, and `GOOGLE_MAPS_API_KEY`.
 
+Sentry is enabled only in production (`APP_ENV=prod`). Set `SENTRY_DSN` in
+production (or `.env.local` when testing prod locally) to report uncaught
+exceptions and Monolog `error` records; dev and test never send to Sentry.
+
 ## Documentation
 
 | Doc | Description |
@@ -98,6 +102,7 @@ docker run --rm -p 8080:80 \
   -e MAILER_FROM=noreply@example.com \
   -e CORS_ALLOW_ORIGIN='^https://example\.com$' \
   -e JWT_PASSPHRASE=... \
+  -e SENTRY_DSN='https://...@....ingest.sentry.io/...' \
   -v "$PWD/config/jwt:/app/config/jwt:ro" \
   znamky
 ```
@@ -116,3 +121,4 @@ Pushing a `v*` git tag builds and publishes to GHCR
 - Symfony Mailer (verification & password reset)
 - Stamp catalog import + Google Geocoding (`symfony/http-client`)
 - `symfony/lock` for stamp import/geocode mutual exclusion
+- Sentry (`sentry/sentry-symfony`) for production exception reporting
