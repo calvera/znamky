@@ -961,9 +961,6 @@ final class AuthGraphQlTest extends WebTestCase
     /**
      * @param array<string, mixed> $payload
      */
-    /**
-     * @param array<string, mixed> $payload
-     */
     private function assertGraphQlAccessDenied(array $payload): void
     {
         self::assertResponseIsSuccessful();
@@ -971,6 +968,9 @@ final class AuthGraphQlTest extends WebTestCase
         $this->assertGraphQlError($payload, Response::HTTP_FORBIDDEN, 'Access Denied');
     }
 
+    /**
+     * @param array<string, mixed> $payload
+     */
     private function assertGraphQlError(array $payload, int $status, string $messagePart): void
     {
         if (
