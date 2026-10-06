@@ -299,6 +299,16 @@ final class AuthTest extends WebTestCase
         self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
     }
 
+    public function testIssuedRefreshTokenIsStoredAsADigest(): void
+    {
+        $email = 'hashed-refresh@example.com';
+        $this->registerAndVerify($email, 'password123');
+        $tokens = $this->login($email, 'password123');
+
+        $stored = $this->storedRefreshTokenFor($email);
+        self::assertSame('sha256$'.hash('sha256', $tokens['refresh_token']), $stored);
+    }
+
     public function testLogoutBlocksAccessAndRefresh(): void
     {
         $email = 'logout@example.com';
@@ -562,6 +572,63 @@ final class AuthTest extends WebTestCase
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
 
+        $this->login($email, $password);
+    }
+
+    public function testReregisteringUnverifiedAccountRotatesTheLiveToken(): void
+    {
+        $email = 'reclaim-live@example.com';
+        $password = 'password123';
+
+        $this->jsonRequest('POST', '/api/register', ['email' => $email]);
+        self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
+        $oldToken = $this->extractTokenFromLastEmail();
+
+        $this->jsonRequest('POST', '/api/register', ['email' => $email]);
+        self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
+        self::assertEmailCount(1);
+        $newToken = $this->extractTokenFromLastEmail();
+        self::assertNotSame($oldToken, $newToken);
+
+        $this->jsonRequest('POST', '/api/verify-email', [
+            'token' => $oldToken,
+            'password' => $password,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
+
+        $this->jsonRequest('POST', '/api/verify-email', [
+            'token' => $newToken,
+            'password' => $password,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+
+        $this->login($email, $password);
+    }
+
+    public function testFailedReissueEmailKeepsThePreviousVerificationToken(): void
+    {
+        $email = 'reissue-smtp@example.com';
+        $password = 'password123';
+
+        $this->jsonRequest('POST', '/api/register', ['email' => $email]);
+        self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
+        $token = $this->extractTokenFromLastEmail();
+
+        static::ensureKernelShutdown();
+        $this->client = static::createClient();
+        $this->installThrowingMailer();
+
+        $this->jsonRequest('POST', '/api/register', ['email' => $email]);
+        self::assertResponseStatusCodeSame(Response::HTTP_INTERNAL_SERVER_ERROR);
+
+        static::ensureKernelShutdown();
+        $this->client = static::createClient();
+
+        $this->jsonRequest('POST', '/api/verify-email', [
+            'token' => $token,
+            'password' => $password,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
         $this->login($email, $password);
     }
 
