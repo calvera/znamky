@@ -117,6 +117,14 @@ final class ScrapeWebStampsCommand extends Command
 
         $progress = null;
         $onEvent = function (string $event, array $payload) use ($io, $output, &$progress): void {
+            if ('filters' === $event) {
+                $countries = \is_array($payload['countries'] ?? null) ? $payload['countries'] : [];
+                $types = \is_array($payload['types'] ?? null) ? $payload['types'] : [];
+                $io->writeln(sprintf('Discovering catalog (%d countries, %d types)...', \count($countries), \count($types)));
+
+                return;
+            }
+
             if ('discovered' === $event) {
                 $countRaw = $payload['count'] ?? 0;
                 Assert::integerish($countRaw);
