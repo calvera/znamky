@@ -285,6 +285,65 @@ final class AuthGraphQlTest extends WebTestCase
         self::assertArrayHasKey('errors', $afterRevoke);
     }
 
+    public function testRefreshReuseUsesOnlyTheMutationToken(): void
+    {
+        $tokens = $this->registerVerifyAndLogin('graphql-refresh-mutation-only@example.com', 'password123');
+
+        $this->client->request(
+            'POST',
+            '/api/graphql?refresh_token=decoy-query-value',
+            server: [
+                'CONTENT_TYPE' => 'application/json',
+                'HTTP_COOKIE' => 'refresh_token=decoy-cookie-value',
+            ],
+            content: json_encode([
+                'query' => <<<'GRAPHQL'
+                    mutation($refreshToken: String!) {
+                      refreshTokenUser(input: { refreshToken: $refreshToken }) {
+                        user {
+                          token
+                          refreshToken
+                        }
+                      }
+                    }
+                    GRAPHQL,
+                'variables' => ['refreshToken' => $tokens['refreshToken']],
+                'refresh_token' => 'decoy-body-value',
+            ], \JSON_THROW_ON_ERROR),
+        );
+        self::assertResponseIsSuccessful();
+        $refresh = $this->jsonResponse();
+        self::assertArrayNotHasKey('errors', $refresh);
+        $refreshData = $this->stringKeyedArray($refresh['data'] ?? null, 'refresh data');
+        $refreshPayload = $this->stringKeyedArray($refreshData['refreshTokenUser'] ?? null, 'refreshTokenUser');
+        $rotated = $this->stringKeyedArray($refreshPayload['user'] ?? null, 'refreshTokenUser.user');
+        $newRefresh = $rotated['refreshToken'] ?? null;
+        self::assertIsString($newRefresh);
+        self::assertNotSame($tokens['refreshToken'], $newRefresh);
+
+        $reuse = $this->graphql(<<<'GRAPHQL'
+            mutation($refreshToken: String!) {
+              refreshTokenUser(input: { refreshToken: $refreshToken }) {
+                user {
+                  token
+                }
+              }
+            }
+            GRAPHQL, variables: ['refreshToken' => $tokens['refreshToken']]);
+        self::assertArrayHasKey('errors', $reuse);
+
+        $afterRevoke = $this->graphql(<<<'GRAPHQL'
+            mutation($refreshToken: String!) {
+              refreshTokenUser(input: { refreshToken: $refreshToken }) {
+                user {
+                  token
+                }
+              }
+            }
+            GRAPHQL, variables: ['refreshToken' => $newRefresh]);
+        self::assertArrayHasKey('errors', $afterRevoke);
+    }
+
     public function testStaleBearerDoesNotBlockPublicAuthMutations(): void
     {
         $email = 'graphql-stale-bearer@example.com';
