@@ -7,10 +7,13 @@ namespace App\Service\Auth;
 use App\Entity\User;
 use App\Repository\UserRepository;
 use App\Security\UserChecker;
+use Doctrine\ORM\EntityManagerInterface;
 use Gesdinet\JWTRefreshTokenBundle\Generator\RefreshTokenGeneratorInterface;
 use Gesdinet\JWTRefreshTokenBundle\Model\FamilyAwareRefreshTokenInterface;
 use Gesdinet\JWTRefreshTokenBundle\Model\RefreshTokenInterface;
 use Gesdinet\JWTRefreshTokenBundle\Model\RefreshTokenManagerInterface;
+use Gesdinet\JWTRefreshTokenBundle\Security\ReuseDetection\RefreshTokenReuseDetector;
+use Gesdinet\JWTRefreshTokenBundle\Security\ReuseDetection\SpentRefreshTokenRegistryInterface;
 use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\RequestStack;
@@ -32,6 +35,9 @@ final class AuthTokenService
         private readonly RefreshTokenGeneratorInterface $refreshTokenGenerator,
         private readonly RefreshTokenManagerInterface $refreshTokenManager,
         private readonly RequestStack $requestStack,
+        private readonly EntityManagerInterface $entityManager,
+        private readonly SpentRefreshTokenRegistryInterface $spentRefreshTokens,
+        private readonly RefreshTokenReuseDetector $refreshTokenReuseDetector,
         #[Autowire(service: 'app.login_rate_limiter')]
         private readonly DefaultLoginRateLimiter $loginRateLimiter,
         #[Autowire('%env(int:JWT_REFRESH_TOKEN_TTL)%')]
@@ -76,8 +82,15 @@ final class AuthTokenService
      */
     public function refresh(string $refreshTokenValue): array
     {
+        $request = Assert::notNull(
+            $this->requestStack->getCurrentRequest(),
+            'Refresh requires an HTTP request.',
+        );
+
         $stored = $this->refreshTokenManager->get($refreshTokenValue);
         if (null === $stored || !$stored->isValid()) {
+            $this->refreshTokenReuseDetector->unknownTokenPresented($refreshTokenValue, $request);
+
             throw new UnauthorizedHttpException('Bearer', 'Invalid refresh token.');
         }
 
@@ -104,9 +117,26 @@ final class AuthTokenService
             $inheritedFamilyValid = $stored->getFamilyValid();
         }
 
-        $this->refreshTokenManager->delete($stored);
+        return $this->entityManager->wrapInTransaction(function () use (
+            $stored,
+            $refreshTokenValue,
+            $user,
+            $inheritedFamily,
+            $inheritedFamilyValid,
+        ): array {
+            // Registry keys by the cleartext the client presented; hashed managers leave the
+            // digest on the entity after get(), which would not match a later recall().
+            $storedValue = $stored->getRefreshToken();
+            $stored->setRefreshToken($refreshTokenValue);
+            $this->spentRefreshTokens->remember($stored);
+            if (null !== $storedValue) {
+                $stored->setRefreshToken($storedValue);
+            }
 
-        return $this->issueTokens($user, $inheritedFamily, $inheritedFamilyValid);
+            $this->refreshTokenManager->delete($stored);
+
+            return $this->issueTokens($user, $inheritedFamily, $inheritedFamilyValid);
+        });
     }
 
     /**

@@ -112,6 +112,66 @@ final class StampWebScrapeServiceTest extends TestCase
         self::assertSame(0, $stats2['scraped']);
     }
 
+    public function testScrapeSanitizesImageSrcPathTraversal(): void
+    {
+        $listHtml = file_get_contents(__DIR__.'/../../fixtures/stamp_web/items_list.html');
+        $lazyJson = file_get_contents(__DIR__.'/../../fixtures/stamp_web/lazy_page1.json');
+        $detailHtml = str_replace(
+            '&quot;src&quot;: &quot;current.png&quot;',
+            '&quot;src&quot;: &quot;../../outside.png&quot;',
+            file_get_contents(__DIR__.'/../../fixtures/stamp_web/item_detail.html'),
+        );
+        $detailHtml = str_replace(
+            '&quot;src&quot;: &quot;archive.png&quot;',
+            '&quot;src&quot;: &quot;nested/../evil.png&quot;',
+            $detailHtml,
+        );
+
+        $client = new MockHttpClient(function (string $method, string $url) use ($listHtml, $detailHtml, $lazyJson): MockResponse {
+            self::assertSame('GET', $method);
+
+            if (str_contains($url, '/items/lazy')) {
+                return new MockResponse($lazyJson, ['response_headers' => ['content-type' => 'application/json']]);
+            }
+            if (str_contains($url, '/items/3535')) {
+                return new MockResponse($detailHtml, ['response_headers' => ['content-type' => 'text/html']]);
+            }
+            if (str_contains($url, '/storage/item_images/medium/outside.png')) {
+                return new MockResponse('OUTSIDE', ['response_headers' => ['content-type' => 'image/png']]);
+            }
+            if (str_contains($url, '/storage/item_images/medium/evil.png')) {
+                return new MockResponse('EVIL', ['response_headers' => ['content-type' => 'image/png']]);
+            }
+            if (str_contains($url, '/items?') || str_ends_with($url, '/items')) {
+                return new MockResponse($listHtml, ['response_headers' => ['content-type' => 'text/html']]);
+            }
+
+            self::fail('Unexpected URL: '.$url);
+        });
+
+        $outputDir = sys_get_temp_dir().'/znamky-scrape-'.bin2hex(random_bytes(4));
+        $stampDir = $outputDir.'/stamps/3535';
+        $stats = (new StampWebScrapeService($client))->scrape(new StampWebScrapeOptions(
+            outputDir: $outputDir,
+            delayDetailMs: 0,
+            delayListMs: 0,
+            delayImageMs: 0,
+            batchPauseMs: 0,
+            bucketPauseMs: 0,
+            countryId: 1,
+            typeId: 0,
+        ));
+
+        self::assertSame(0, $stats['failed']);
+        self::assertSame(2, $stats['images']);
+        self::assertFileExists($stampDir.'/images/current/outside.png');
+        self::assertFileExists($stampDir.'/images/archive/evil.png');
+        self::assertFileDoesNotExist($outputDir.'/outside.png');
+        self::assertFileDoesNotExist($outputDir.'/stamps/outside.png');
+        self::assertSame('OUTSIDE', file_get_contents($stampDir.'/images/current/outside.png'));
+        self::assertSame('EVIL', file_get_contents($stampDir.'/images/archive/evil.png'));
+    }
+
     public function testParseInertiaPageWithoutDataPageThrows(): void
     {
         $service = new StampWebScrapeService(new MockHttpClient());

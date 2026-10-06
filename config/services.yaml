@@ -22,6 +22,7 @@ services:
             - '../src/Entity/'
             - '../src/Dto/'
             - '../src/Kernel.php'
+            - '../src/Security/SoftFailJwtAuthenticator.php'
 
     # DefaultLoginRateLimiter needs named limiter factories; attribute wiring can't express that.
     app.login_rate_limiter:
@@ -30,6 +31,26 @@ services:
             $globalFactory: '@limiter.ip_login'
             $localFactory: '@limiter.username_ip_login'
             $secret: '%kernel.secret%'
+
+    # Abstract parent for Lexik's jwt factory (ChildDefinition + user provider arg).
+    app.security.soft_fail_jwt_authenticator:
+        class: App\Security\SoftFailJwtAuthenticator
+        parent: lexik_jwt_authentication.security.jwt_authenticator
+        abstract: true
+
+    # Gesdinet v3.0.0 wires reuse_detection.cache via service((string) param(...)),
+    # which resolves to a literal "%…%" service id. Replace with a real pool.
+    gesdinet_jwt_refresh_token.spent_refresh_token_registry:
+        class: Gesdinet\JWTRefreshTokenBundle\Security\ReuseDetection\CacheSpentRefreshTokenRegistry
+        arguments:
+            $pool: '@cache.app'
+            $ttl: '%gesdinet_jwt_refresh_token.reuse_detection.ttl%'
+
+    # Gesdinet marks these @internal; alias them for GraphQL refresh parity.
+    Gesdinet\JWTRefreshTokenBundle\Security\ReuseDetection\SpentRefreshTokenRegistryInterface:
+        alias: gesdinet_jwt_refresh_token.spent_refresh_token_registry
+    Gesdinet\JWTRefreshTokenBundle\Security\ReuseDetection\RefreshTokenReuseDetector:
+        alias: gesdinet_jwt_refresh_token.refresh_token_reuse_detector
 
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones

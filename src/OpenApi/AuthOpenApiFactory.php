@@ -89,7 +89,7 @@ final class AuthOpenApiFactory implements OpenApiFactoryInterface
                 (string) HttpResponse::HTTP_TOO_MANY_REQUESTS => $this->tooManyRequestsResponse(),
             ],
             summary: 'Register a new user',
-            description: 'Creates an unverified user and sends a verification token by email. The account password is set later via verify-email. Rate limited per client IP.',
+            description: 'Creates an unverified user and sends a verification token by email. Re-registering an unverified email rotates and resends the token. Verified emails return 422. The account password is set later via verify-email. Rate limited per client IP.',
             requestBody: new RequestBody(
                 description: 'Registration email',
                 content: new \ArrayObject([

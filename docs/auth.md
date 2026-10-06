@@ -21,10 +21,16 @@ Interactive docs: [`/api/docs`](/api/docs). Machine-readable: [`openapi.yaml`](o
 All other `/api/*` routes require a valid JWT (`IS_AUTHENTICATED_FULLY`), except
 `/api/graphql` (public entrypoint; operation-level security applies).
 
+An invalid, expired, or blocklisted `Authorization: Bearer` on the `api` firewall
+is ignored (request continues as anonymous). Public auth routes and GraphQL auth
+mutations still run; protected routes/`me`/`logout`/stamp queries still require a
+valid JWT.
+
 ## GraphQL
 
 `POST /api/graphql` (IDE at `/api/graphql/graphiql`). Auth mutations reuse the
 same services and rules as REST. Stamp catalog queries still require JWT.
+Clients may keep a stale Bearer while calling `refreshTokenUser` or `loginUser`.
 
 | Field | Auth | Purpose |
 |-------|------|---------|
@@ -74,6 +80,10 @@ Content-Type: application/json
 **201** `{ "id": 1, "email": "user@example.com" }` — user is **not** verified yet.
 Login before verification returns **401**.
 
+If the email already belongs to an **unverified** account, register rotates the
+verification token, extends expiry by one day, and resends the email (same **201**
+shape). A **verified** email still returns **422**.
+
 The verification email body includes a raw token. Confirm it and set the password
 that will be used to log in. Only the mailbox owner chooses the credential that
 can authenticate.
@@ -106,7 +116,10 @@ Authorization: Bearer <jwt>
 ## Refresh tokens
 
 Refresh tokens are **single-use**. After a successful refresh, the previous refresh
-token is invalid.
+token is invalid. Tokens are stored hashed (`hash_tokens`); existing cleartext rows
+are accepted once and rewritten. Replaying a spent refresh token revokes the whole
+token family (session), for both REST and GraphQL. Replay detection uses `cache.app`
+— share that cache across replicas in a multi-instance deploy.
 
 ```http
 POST /api/token/refresh
@@ -176,8 +189,8 @@ Request DTOs (`register`, `verify-email`, `forgot-password`, `reset-password`,
 Other cases:
 
 - Bad credentials / unverified account / expired JWT or refresh: **401**
-- Duplicate registration email: **422** (same `ValidationFailed` shape when
-  thrown from the validator)
+- Duplicate **verified** registration email: **422** (same `ValidationFailed`
+  shape when thrown from the validator); unverified emails reclaim via register
 - Invalid/expired verify or reset token: **422**
 - Rate limit exceeded on public auth endpoints: **429** (`Retry-After` header)
 
@@ -192,6 +205,12 @@ Password minimum length is **8** characters.
 | `POST /api/login` | login throttling (`username+IP` + `IP`) | 5 / 5 minutes per username+IP; 50 / 15 minutes per IP |
 
 Config: `config/packages/rate_limiter.yaml`.
+
+These limiters key on `Request::getClientIp()`. Behind FrankenPHP/Caddy or another
+load balancer, set `SYMFONY_TRUSTED_PROXIES` to the immediate trusted proxy
+CIDR(s) (see `config/packages/framework.yaml`). Leave it empty when the app sees
+clients directly. Do not trust all traffic (`0.0.0.0/0`) unless the network edge
+already restricts who can reach PHP.
 
 ## Secrets
 

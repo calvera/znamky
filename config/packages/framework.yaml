@@ -2,6 +2,11 @@
 framework:
     secret: '%env(APP_SECRET)%'
 
+    # Empty default = clients connect directly. Behind a reverse proxy/LB, set
+    # SYMFONY_TRUSTED_PROXIES to the immediate trusted hop CIDR(s).
+    trusted_proxies: '%env(default::SYMFONY_TRUSTED_PROXIES)%'
+    trusted_headers: ['x-forwarded-for', 'x-forwarded-proto', 'x-forwarded-port', 'x-forwarded-host']
+
     # Stateless JWT API — no server-side sessions.
     session: false
 

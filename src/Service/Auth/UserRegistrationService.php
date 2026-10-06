@@ -25,6 +25,11 @@ final class UserRegistrationService
 
     public function register(RegisterRequest $request): User
     {
+        $existing = $this->userRepository->findOneByEmail($request->email);
+        if (null !== $existing && !$existing->isVerified()) {
+            return $this->reissueVerification($existing);
+        }
+
         $user = new User();
         $user->setEmail($request->email);
 
@@ -41,6 +46,20 @@ final class UserRegistrationService
         // The raw token exists only in the email. Commit the account only after
         // that send succeeds, or a transient SMTP failure leaves an address that
         // can never be verified and can never be registered again.
+        $this->entityManager->wrapInTransaction(function () use ($user, $rawToken): void {
+            $this->userRepository->save($user);
+            $this->authMailer->sendEmailVerification($user, $rawToken);
+        });
+
+        return $user;
+    }
+
+    private function reissueVerification(User $user): User
+    {
+        $rawToken = $this->tokenHasher->generate();
+        $user->setEmailVerificationToken($this->tokenHasher->hash($rawToken));
+        $user->setEmailVerificationTokenExpiresAt(new DateTimeImmutable('+1 day'));
+
         $this->entityManager->wrapInTransaction(function () use ($user, $rawToken): void {
             $this->userRepository->save($user);
             $this->authMailer->sendEmailVerification($user, $rawToken);

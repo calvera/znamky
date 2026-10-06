@@ -176,6 +176,12 @@ final class AuthTest extends WebTestCase
         $payload = ['email' => 'dup@example.com'];
         $this->jsonRequest('POST', '/api/register', $payload);
         self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
+        $token = $this->extractTokenFromLastEmail();
+        $this->jsonRequest('POST', '/api/verify-email', [
+            'token' => $token,
+            'password' => 'password123',
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
 
         $this->jsonRequest('POST', '/api/register', $payload);
         self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
@@ -224,6 +230,31 @@ final class AuthTest extends WebTestCase
         self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
     }
 
+    public function testRefreshReuseRevokesTheTokenFamily(): void
+    {
+        $this->registerAndVerify('refresh-reuse@example.com', 'password123');
+        $tokens = $this->login('refresh-reuse@example.com', 'password123');
+
+        $this->jsonRequest('POST', '/api/token/refresh', [
+            'refresh_token' => $tokens['refresh_token'],
+        ]);
+        self::assertResponseIsSuccessful();
+        $rotated = $this->jsonResponse();
+        $newRefresh = $rotated['refresh_token'] ?? null;
+        self::assertIsString($newRefresh);
+        self::assertNotSame($tokens['refresh_token'], $newRefresh);
+
+        $this->jsonRequest('POST', '/api/token/refresh', [
+            'refresh_token' => $tokens['refresh_token'],
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+
+        $this->jsonRequest('POST', '/api/token/refresh', [
+            'refresh_token' => $newRefresh,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+    }
+
     public function testLogoutBlocksAccessAndRefresh(): void
     {
         $email = 'logout@example.com';
@@ -249,6 +280,41 @@ final class AuthTest extends WebTestCase
 
         $this->jsonRequest('POST', '/api/token/refresh', [
             'refresh_token' => $tokens['refresh_token'],
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+    }
+
+    public function testStaleBearerDoesNotBlockPublicRegister(): void
+    {
+        $email = 'stale-bearer@example.com';
+        $password = 'password123';
+        $this->registerAndVerify($email, $password);
+        $tokens = $this->login($email, $password);
+
+        $this->client->request(
+            'POST',
+            '/api/logout',
+            server: [
+                'HTTP_AUTHORIZATION' => 'Bearer '.$tokens['token'],
+                'CONTENT_TYPE' => 'application/json',
+            ],
+            content: json_encode(['refresh_token' => $tokens['refresh_token']], \JSON_THROW_ON_ERROR),
+        );
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+
+        $this->client->request(
+            'POST',
+            '/api/register',
+            server: [
+                'HTTP_AUTHORIZATION' => 'Bearer '.$tokens['token'],
+                'CONTENT_TYPE' => 'application/json',
+            ],
+            content: json_encode(['email' => 'stale-bearer-register@example.com'], \JSON_THROW_ON_ERROR),
+        );
+        self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
+
+        $this->client->request('GET', '/api/me', server: [
+            'HTTP_AUTHORIZATION' => 'Bearer '.$tokens['token'],
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
     }
@@ -394,7 +460,7 @@ final class AuthTest extends WebTestCase
         self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
     }
 
-    public function testRegisterStoresLowercaseEmailAndRejectsCaseVariantDuplicate(): void
+    public function testRegisterStoresLowercaseEmailAndRejectsVerifiedDuplicate(): void
     {
         $this->jsonRequest('POST', '/api/register', [
             'email' => 'User@Example.com',
@@ -404,16 +470,16 @@ final class AuthTest extends WebTestCase
         self::assertSame('user@example.com', $created['email'] ?? null);
         $token = $this->extractTokenFromLastEmail();
 
-        $this->jsonRequest('POST', '/api/register', [
-            'email' => 'user@example.com',
-        ]);
-        self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
-
         $this->jsonRequest('POST', '/api/verify-email', [
             'token' => $token,
             'password' => 'password123',
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+
+        $this->jsonRequest('POST', '/api/register', [
+            'email' => 'user@example.com',
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
 
         $tokens = $this->login('user@example.com', 'password123');
         $this->client->request('GET', '/api/me', server: [
@@ -422,6 +488,37 @@ final class AuthTest extends WebTestCase
         self::assertResponseIsSuccessful();
         $me = $this->jsonResponse();
         self::assertSame('user@example.com', $me['email']);
+    }
+
+    public function testExpiredVerificationCanBeReclaimedByRegisteringAgain(): void
+    {
+        $email = 'reclaim-verify@example.com';
+        $password = 'password123';
+
+        $this->jsonRequest('POST', '/api/register', ['email' => $email]);
+        self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
+        $oldToken = $this->extractTokenFromLastEmail();
+        $this->expireUserToken($email, 'emailVerificationTokenExpiresAt');
+
+        $this->jsonRequest('POST', '/api/register', ['email' => $email]);
+        self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
+        self::assertEmailCount(1);
+        $newToken = $this->extractTokenFromLastEmail();
+        self::assertNotSame($oldToken, $newToken);
+
+        $this->jsonRequest('POST', '/api/verify-email', [
+            'token' => $oldToken,
+            'password' => $password,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
+
+        $this->jsonRequest('POST', '/api/verify-email', [
+            'token' => $newToken,
+            'password' => $password,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+
+        $this->login($email, $password);
     }
 
     public function testExpiredVerificationTokenDoesNotVerifyUser(): void

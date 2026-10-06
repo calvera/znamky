@@ -123,14 +123,14 @@ final class AuthGraphQlTest extends WebTestCase
         self::assertResponseIsSuccessful();
         self::assertArrayNotHasKey('errors', $logout);
 
-        $this->graphql(<<<'GRAPHQL'
+        $meAfterLogout = $this->graphql(<<<'GRAPHQL'
             {
               meUser {
                 email
               }
             }
             GRAPHQL, $token);
-        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+        $this->assertGraphQlAccessDenied($meAfterLogout);
 
         $refreshAfterLogout = $this->graphql(<<<'GRAPHQL'
             mutation($refreshToken: String!) {
@@ -237,6 +237,132 @@ final class AuthGraphQlTest extends WebTestCase
             }
             GRAPHQL, variables: ['refreshToken' => $tokens['refreshToken']]);
         self::assertArrayHasKey('errors', $reuse);
+    }
+
+    public function testRefreshReuseRevokesTheTokenFamily(): void
+    {
+        $tokens = $this->registerVerifyAndLogin('graphql-refresh-reuse@example.com', 'password123');
+
+        $refresh = $this->graphql(<<<'GRAPHQL'
+            mutation($refreshToken: String!) {
+              refreshTokenUser(input: { refreshToken: $refreshToken }) {
+                user {
+                  token
+                  refreshToken
+                }
+              }
+            }
+            GRAPHQL, variables: ['refreshToken' => $tokens['refreshToken']]);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $refresh);
+        $refreshData = $this->stringKeyedArray($refresh['data'] ?? null, 'refresh data');
+        $refreshPayload = $this->stringKeyedArray($refreshData['refreshTokenUser'] ?? null, 'refreshTokenUser');
+        $rotated = $this->stringKeyedArray($refreshPayload['user'] ?? null, 'refreshTokenUser.user');
+        $newRefresh = $rotated['refreshToken'] ?? null;
+        self::assertIsString($newRefresh);
+        self::assertNotSame($tokens['refreshToken'], $newRefresh);
+
+        $reuse = $this->graphql(<<<'GRAPHQL'
+            mutation($refreshToken: String!) {
+              refreshTokenUser(input: { refreshToken: $refreshToken }) {
+                user {
+                  token
+                }
+              }
+            }
+            GRAPHQL, variables: ['refreshToken' => $tokens['refreshToken']]);
+        self::assertArrayHasKey('errors', $reuse);
+
+        $afterRevoke = $this->graphql(<<<'GRAPHQL'
+            mutation($refreshToken: String!) {
+              refreshTokenUser(input: { refreshToken: $refreshToken }) {
+                user {
+                  token
+                }
+              }
+            }
+            GRAPHQL, variables: ['refreshToken' => $newRefresh]);
+        self::assertArrayHasKey('errors', $afterRevoke);
+    }
+
+    public function testStaleBearerDoesNotBlockPublicAuthMutations(): void
+    {
+        $email = 'graphql-stale-bearer@example.com';
+        $password = 'password123';
+        $tokens = $this->registerVerifyAndLogin($email, $password);
+        $staleJwt = 'not-a-valid-jwt';
+
+        $me = $this->graphql(<<<'GRAPHQL'
+            {
+              meUser {
+                email
+              }
+            }
+            GRAPHQL, $staleJwt);
+        $this->assertGraphQlAccessDenied($me);
+
+        $refresh = $this->graphql(<<<'GRAPHQL'
+            mutation($refreshToken: String!) {
+              refreshTokenUser(input: { refreshToken: $refreshToken }) {
+                user {
+                  token
+                  refreshToken
+                }
+              }
+            }
+            GRAPHQL, $staleJwt, ['refreshToken' => $tokens['refreshToken']]);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $refresh);
+
+        $login = $this->graphql(<<<'GRAPHQL'
+            mutation($email: String!, $password: String!) {
+              loginUser(input: { email: $email, password: $password }) {
+                user {
+                  token
+                  refreshToken
+                }
+              }
+            }
+            GRAPHQL, $staleJwt, ['email' => $email, 'password' => $password]);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $login);
+
+        $register = $this->graphql(<<<'GRAPHQL'
+            mutation {
+              registerUser(input: { email: "graphql-stale-register@example.com" }) {
+                user {
+                  email
+                }
+              }
+            }
+            GRAPHQL, $staleJwt);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $register);
+
+        $blocklisted = $this->tokensFromLogin($login);
+        $logout = $this->graphql(<<<'GRAPHQL'
+            mutation($refreshToken: String) {
+              logoutUser(input: { refreshToken: $refreshToken }) {
+                user {
+                  success
+                }
+              }
+            }
+            GRAPHQL, $blocklisted['token'], ['refreshToken' => $blocklisted['refreshToken']]);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $logout);
+
+        $loginAgain = $this->graphql(<<<'GRAPHQL'
+            mutation($email: String!, $password: String!) {
+              loginUser(input: { email: $email, password: $password }) {
+                user {
+                  token
+                }
+              }
+            }
+            GRAPHQL, $blocklisted['token'], ['email' => $email, 'password' => $password]);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $loginAgain);
     }
 
     public function testRegisterWorksWithoutBearerAndStampQueryStaysProtected(): void
@@ -489,6 +615,18 @@ final class AuthGraphQlTest extends WebTestCase
         self::assertEmailCount(1);
         $verificationToken = $this->extractTokenFromLastEmail();
 
+        $verify = $this->graphql(<<<'GRAPHQL'
+            mutation($token: String!, $password: String!) {
+              verifyEmailUser(input: { token: $token, password: $password }) {
+                user {
+                  success
+                }
+              }
+            }
+            GRAPHQL, variables: ['token' => $verificationToken, 'password' => $password]);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $verify);
+
         $duplicate = $this->graphql(<<<'GRAPHQL'
             mutation($email: String!) {
               registerUser(input: { email: $email }) {
@@ -502,18 +640,6 @@ final class AuthGraphQlTest extends WebTestCase
 
         $users = static::getContainer()->get(UserRepository::class);
         self::assertNotNull($users->findOneByEmail($email));
-
-        $verify = $this->graphql(<<<'GRAPHQL'
-            mutation($token: String!, $password: String!) {
-              verifyEmailUser(input: { token: $token, password: $password }) {
-                user {
-                  success
-                }
-              }
-            }
-            GRAPHQL, variables: ['token' => $verificationToken, 'password' => $password]);
-        self::assertResponseIsSuccessful();
-        self::assertArrayNotHasKey('errors', $verify);
 
         $login = $this->loginMutation($email, $password);
         self::assertResponseIsSuccessful();
@@ -776,6 +902,16 @@ final class AuthGraphQlTest extends WebTestCase
     /**
      * @param array<string, mixed> $payload
      */
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function assertGraphQlAccessDenied(array $payload): void
+    {
+        self::assertResponseIsSuccessful();
+        self::assertArrayHasKey('errors', $payload);
+        $this->assertGraphQlError($payload, Response::HTTP_FORBIDDEN, 'Access Denied');
+    }
+
     private function assertGraphQlError(array $payload, int $status, string $messagePart): void
     {
         if (

@@ -149,27 +149,31 @@ final class StampWebScrapeService
                 if (!\is_string($src) || '' === $src) {
                     continue;
                 }
+                $safeName = $this->safeImageFileName($src);
+                if (null === $safeName) {
+                    continue;
+                }
                 $archiveRaw = $image['archive'] ?? 0;
                 Assert::integerish($archiveRaw, 'Image archive flag must be integerish.');
                 $archive = (int) $archiveRaw;
                 $subdir = 1 === $archive ? 'archive' : 'current';
                 $targetDir = $stampDir.\DIRECTORY_SEPARATOR.'images'.\DIRECTORY_SEPARATOR.$subdir;
                 $this->ensureDirectory($targetDir);
-                $targetPath = $targetDir.\DIRECTORY_SEPARATOR.$src;
-                $relative = 'images/'.$subdir.'/'.$src;
+                $targetPath = $targetDir.\DIRECTORY_SEPARATOR.$safeName;
+                $relative = 'images/'.$subdir.'/'.$safeName;
 
                 if ($options->force || !is_file($targetPath)) {
-                    $imageUrl = self::BASE_URL.'/storage/item_images/medium/'.rawurlencode($src);
+                    $imageUrl = self::BASE_URL.'/storage/item_images/medium/'.rawurlencode($safeName);
                     $binary = $this->requestContent($imageUrl, $options);
                     file_put_contents($targetPath, $binary);
                     $this->pause($options->delayImageMs);
                 }
 
                 $imageFiles[] = [
-                    'src' => $src,
+                    'src' => $safeName,
                     'archive' => $archive,
                     'path' => $relative,
-                    'url' => self::BASE_URL.'/storage/item_images/medium/'.$src,
+                    'url' => self::BASE_URL.'/storage/item_images/medium/'.$safeName,
                 ];
                 ++$imageCount;
             }
@@ -542,6 +546,16 @@ final class StampWebScrapeService
         Assert::integerish($value, $message);
 
         return (int) $value;
+    }
+
+    private function safeImageFileName(string $src): ?string
+    {
+        $safeName = basename(str_replace(["\0", '\\'], '', $src));
+        if ('' === $safeName || '.' === $safeName || '..' === $safeName) {
+            return null;
+        }
+
+        return $safeName;
     }
 
     /**
