@@ -33,7 +33,7 @@ Coverage is uploaded to Codecov. PRs get a coverage comment. The Codecov check f
 
 ### Secrets
 
-Set `CODECOV_TOKEN` in the repo secrets (Settings → Secrets and variables → Actions). Create a token at [codecov.io](https://codecov.io) for this repository. Required for private repos; recommended for public ones so uploads are reliable.
+Set `CODECOV_TOKEN` in the repo secrets (Settings → Secrets and variables → Actions). Create a token at [codecov.io](https://codecov.io) for this repository. Required for private repos; recommended for public ones so uploads are reliable. When the secret is unset, the upload step is skipped and PHPUnit still passes. Once it is set, a failed upload fails the job.
 
 ## Dependency updates (Renovate)
 
