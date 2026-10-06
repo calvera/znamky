@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Api;
 
+use App\Entity\RefreshToken;
 use App\Entity\User;
 use App\Repository\UserRepository;
 use App\Service\Auth\AuthMailer;
@@ -11,6 +12,7 @@ use App\Service\Auth\PasswordResetService;
 use App\Service\Auth\TokenHasher;
 use Doctrine\ORM\EntityManagerInterface;
 use Gesdinet\JWTRefreshTokenBundle\Model\RevokeRefreshTokenManagerInterface;
+use Safe\DateTime;
 use Safe\DateTimeImmutable;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\MailerAssertionsTrait;
@@ -253,6 +255,51 @@ final class AuthTest extends WebTestCase
             'refresh_token' => $newRefresh,
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+    }
+
+    public function testStoredRefreshTokenDigestCannotBeUsedToRefresh(): void
+    {
+        $email = 'digest-refresh@example.com';
+        $this->registerAndVerify($email, 'password123');
+        $tokens = $this->login($email, 'password123');
+
+        $stored = $this->storedRefreshTokenFor($email);
+        self::assertNotSame($tokens['refresh_token'], $stored);
+        self::assertStringStartsWith('sha256$', $stored);
+
+        $this->jsonRequest('POST', '/api/token/refresh', [
+            'refresh_token' => $stored,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+
+        $this->jsonRequest('POST', '/api/token/refresh', [
+            'refresh_token' => $tokens['refresh_token'],
+        ]);
+        self::assertResponseIsSuccessful();
+    }
+
+    public function testCleartextRefreshTokenIssuedBeforeHashingStillRefreshes(): void
+    {
+        $email = 'legacy-refresh@example.com';
+        $this->registerAndVerify($email, 'password123');
+        $cleartext = bin2hex(random_bytes(64));
+
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $refreshToken = new RefreshToken();
+        $refreshToken->setRefreshToken($cleartext);
+        $refreshToken->setUsername($email);
+        $refreshToken->setValid(new DateTime('+1 day'));
+        $em->persist($refreshToken);
+        $em->flush();
+
+        $this->jsonRequest('POST', '/api/token/refresh', [
+            'refresh_token' => $cleartext,
+        ]);
+        self::assertResponseIsSuccessful();
+        $rotated = $this->jsonResponse();
+        self::assertIsString($rotated['refresh_token'] ?? null);
+        self::assertNotSame($cleartext, $rotated['refresh_token']);
     }
 
     public function testLogoutBlocksAccessAndRefresh(): void
@@ -1084,6 +1131,19 @@ final class AuthTest extends WebTestCase
             'password' => $password,
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+    }
+
+    private function storedRefreshTokenFor(string $email): string
+    {
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $stored = $em->getConnection()->fetchOne(
+            'SELECT refresh_token FROM refresh_tokens WHERE username = :username',
+            ['username' => strtolower($email)],
+        );
+        self::assertIsString($stored);
+
+        return $stored;
     }
 
     private function findUser(string $email): User

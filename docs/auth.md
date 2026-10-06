@@ -117,7 +117,8 @@ Authorization: Bearer <jwt>
 
 Refresh tokens are **single-use**. After a successful refresh, the previous refresh
 token is invalid. Tokens are stored hashed (`hash_tokens`); existing cleartext rows
-are accepted once and rewritten. Replaying a spent refresh token revokes the whole
+are accepted once and rewritten. The stored `sha256$…` digest is not a credential.
+Replaying a spent refresh token revokes the whole
 token family (session), for both REST and GraphQL. Replay detection uses `cache.app`
 — share that cache across replicas in a multi-instance deploy.
 
