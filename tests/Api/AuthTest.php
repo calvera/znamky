@@ -278,9 +278,9 @@ final class AuthTest extends WebTestCase
         self::assertResponseIsSuccessful();
     }
 
-    public function testCleartextRefreshTokenIssuedBeforeHashingStillRefreshes(): void
+    public function testCleartextRefreshTokenRowCannotBeUsedToRefresh(): void
     {
-        $email = 'legacy-refresh@example.com';
+        $email = 'cleartext-refresh@example.com';
         $this->registerAndVerify($email, 'password123');
         $cleartext = bin2hex(random_bytes(64));
 
@@ -296,10 +296,7 @@ final class AuthTest extends WebTestCase
         $this->jsonRequest('POST', '/api/token/refresh', [
             'refresh_token' => $cleartext,
         ]);
-        self::assertResponseIsSuccessful();
-        $rotated = $this->jsonResponse();
-        self::assertIsString($rotated['refresh_token'] ?? null);
-        self::assertNotSame($cleartext, $rotated['refresh_token']);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
     }
 
     public function testLogoutBlocksAccessAndRefresh(): void

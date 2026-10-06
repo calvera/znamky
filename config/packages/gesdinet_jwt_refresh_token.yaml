@@ -6,8 +6,8 @@ gesdinet_jwt_refresh_token:
     single_use_ttl_update: true
     hash_tokens:
         enabled: true
-        # Rewrite cleartext rows on first use so enabling hashing does not force re-login.
-        accept_stored_in_the_clear: true
+        # Hashing is on from day one; never accept a cleartext (or digest) row as a credential.
+        accept_stored_in_the_clear: false
     reuse_detection:
         enabled: true
         # cache.app must be shared across replicas for replay detection to work in a fleet.
