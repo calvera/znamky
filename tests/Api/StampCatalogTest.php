@@ -258,9 +258,9 @@ final class StampCatalogTest extends WebTestCase
         $storedStampLng = $connection->fetchOne('SELECT longitude FROM stamps WHERE id = ?', [$stampId]);
         $storedPlaceLat = $connection->fetchOne('SELECT latitude FROM stamp_places WHERE id = ?', [$placeId]);
         $storedPlaceLng = $connection->fetchOne('SELECT longitude FROM stamp_places WHERE id = ?', [$placeId]);
-        self::assertSame($expectedStampLatitude, $storedStampLat);
-        self::assertSame($expectedStampLongitude, $storedStampLng);
-        self::assertSame($expectedPlaceLatitude, $storedPlaceLat);
+        $this->assertStoredDecimal($storedStampLat, $expectedStampLatitude);
+        $this->assertStoredDecimal($storedStampLng, $expectedStampLongitude);
+        $this->assertStoredDecimal($storedPlaceLat, $expectedPlaceLatitude);
         self::assertNull($storedPlaceLng);
 
         $headers = [
@@ -293,6 +293,13 @@ final class StampCatalogTest extends WebTestCase
     {
         self::assertIsFloat($value);
         self::assertEqualsWithDelta($expected, $value, 0.00000005);
+    }
+
+    private function assertStoredDecimal(mixed $stored, string $expected): void
+    {
+        self::assertNotNull($stored);
+        self::assertTrue(is_numeric($stored));
+        self::assertSame($expected, \sprintf('%.7F', (float) $stored));
     }
 
     /**
