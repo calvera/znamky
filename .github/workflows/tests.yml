@@ -13,6 +13,81 @@ permissions:
   actions: write
 
 jobs:
+  cs:
+    name: CS Fixer
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: intl
+          coverage: none
+          ini-values: memory_limit=512M
+          tools: composer:v2
+
+      - name: Get Composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Composer packages
+        uses: actions/cache@v6
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('composer.lock') }}
+          restore-keys: ${{ runner.os }}-composer-
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Check coding standards
+        run: composer cs-check
+
+  phpstan:
+    name: PHPStan
+    runs-on: ubuntu-latest
+
+    env:
+      APP_ENV: dev
+      DATABASE_URL: "postgresql://app:!ChangeMe!@127.0.0.1:5432/app?serverVersion=16&charset=utf8"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: intl, pdo_pgsql
+          coverage: none
+          ini-values: memory_limit=512M
+          tools: composer:v2
+
+      - name: Get Composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Composer packages
+        uses: actions/cache@v6
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('composer.lock') }}
+          restore-keys: ${{ runner.os }}-composer-
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Warm Symfony container
+        run: php bin/console cache:warmup --no-interaction
+
+      - name: Run PHPStan
+        run: composer phpstan
+
   phpunit:
     name: PHPUnit
     runs-on: ubuntu-latest
@@ -83,3 +158,14 @@ jobs:
             var/coverage.cobertura.xml
           if-no-files-found: ignore
           retention-days: 14
+
+      - name: Upload coverage to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: var/coverage.cobertura.xml
+          disable_search: true
+          fail_ci_if_error: true
+          flags: unittests
+          name: phpunit

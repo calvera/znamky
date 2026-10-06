@@ -1,4 +1,4 @@
-name: Docker
+name: Release
 
 on:
   push:
@@ -6,19 +6,19 @@ on:
       - "v*"
 
 concurrency:
-  group: docker-${{ github.workflow }}-${{ github.ref }}
+  group: release-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 env:
   IMAGE: ghcr.io/${{ github.repository }}
 
 jobs:
-  build:
-    name: Build and push
+  release:
+    name: Build, push, and release
     runs-on: ubuntu-latest
 
     steps:
@@ -56,3 +56,8 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          generate_release_notes: true

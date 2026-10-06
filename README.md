@@ -50,6 +50,7 @@ template variable to `znamky`.
 |-----|-------------|
 | [docs/auth.md](docs/auth.md) | Auth flows, endpoints, tokens, validation errors |
 | [docs/stamps.md](docs/stamps.md) | Stamp catalog, CSV import, geocoding, read-only API |
+| [docs/contributing.md](docs/contributing.md) | CI, Codecov, Renovate, releases, branch protection |
 | [docs/openapi.yaml](docs/openapi.yaml) | OpenAPI 3 spec (auth + stamp resources) |
 | `/api/docs` | Interactive Swagger UI |
 | `/api/graphql` | GraphQL (public entry; auth mutations + JWT stamp queries); IDE at `/api/graphql/graphiql` |
