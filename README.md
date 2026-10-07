@@ -1,5 +1,11 @@
 # Znamky
 
+[![Tests](https://img.shields.io/github/actions/workflow/status/calvera/znamky/tests.yml?branch=main&label=tests)](https://github.com/calvera/znamky/actions/workflows/tests.yml)
+[![codecov](https://img.shields.io/codecov/c/github/calvera/znamky)](https://codecov.io/gh/calvera/znamky)
+![PHP](https://img.shields.io/badge/PHP-8.4+-777BB4?logo=php&logoColor=white)
+![Symfony](https://img.shields.io/badge/Symfony-8.1-000000?logo=symfony&logoColor=white)
+[![Release](https://img.shields.io/github/v/release/calvera/znamky)](https://github.com/calvera/znamky/releases)
+
 Symfony 8 JSON API with JWT authentication, a tourist-stamp catalog, email
 verification, and password reset.
 
