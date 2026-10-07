@@ -43,9 +43,9 @@ final class AuthGraphQlTest extends WebTestCase
               }
             }
             GRAPHQL, variables: [
-                'email' => 'graphql-locale-cs@example.com',
-                'locale' => 'cs',
-            ]);
+            'email' => 'graphql-locale-cs@example.com',
+            'locale' => 'cs',
+        ]);
 
         self::assertResponseIsSuccessful();
         self::assertArrayNotHasKey('errors', $register);
@@ -54,7 +54,7 @@ final class AuthGraphQlTest extends WebTestCase
         $email = self::getMailerMessage();
         self::assertInstanceOf(Email::class, $email);
         self::assertSame('Ověření e-mailu', $email->getSubject());
-        self::assertNotNull($this->extractTokenFromLastEmail());
+        $this->extractTokenFromLastEmail();
     }
 
     public function testRegisterVerifyLoginMeAndLogout(): void
