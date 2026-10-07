@@ -28,7 +28,10 @@ final class RegisterMutationResolver implements MutationResolverInterface
 
         $input = $this->inputValidator->input($context);
         $request = new RegisterRequest(
-            $this->inputValidator->string($input, 'email'),
+            email: $this->inputValidator->string($input, 'email'),
+            locale: \array_key_exists('locale', $input)
+                ? $this->inputValidator->string($input, 'locale')
+                : 'en',
         );
         $this->inputValidator->validate($request);
 

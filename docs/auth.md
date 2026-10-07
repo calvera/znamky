@@ -77,6 +77,8 @@ Content-Type: application/json
 {"email":"user@example.com"}
 ```
 
+Optional `locale` (`en` default, or `cs`) selects the verification email language.
+
 **201** `{ "id": 1, "email": "user@example.com" }` — user is **not** verified yet.
 Login before verification returns **401**.
 
@@ -84,9 +86,9 @@ If the email already belongs to an **unverified** account, register rotates the
 verification token, extends expiry by one day, and resends the email (same **201**
 shape). A **verified** email still returns **422**.
 
-The verification email body includes a raw token. Confirm it and set the password
-that will be used to log in. Only the mailbox owner chooses the credential that
-can authenticate.
+The verification email body includes a raw token (enter it in the client app).
+Confirm it and set the password that will be used to log in. Only the mailbox
+owner chooses the credential that can authenticate.
 
 ```http
 POST /api/verify-email
@@ -139,6 +141,8 @@ Content-Type: application/json
 
 {"email":"user@example.com"}
 ```
+
+Optional `locale` (`en` default, or `cs`) selects the reset email language.
 
 Always **204** (does not reveal whether the email exists). If the user exists, a
 reset token is emailed.

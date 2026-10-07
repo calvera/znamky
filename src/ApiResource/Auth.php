@@ -31,6 +31,7 @@ use Symfony\Component\Serializer\Attribute\Groups;
             resolver: RegisterMutationResolver::class,
             args: [
                 'email' => ['type' => 'String!'],
+                'locale' => ['type' => 'String'],
             ],
             security: 'true',
             name: 'register',
@@ -85,6 +86,7 @@ use Symfony\Component\Serializer\Attribute\Groups;
             resolver: ForgotPasswordMutationResolver::class,
             args: [
                 'email' => ['type' => 'String!'],
+                'locale' => ['type' => 'String'],
             ],
             security: 'true',
             name: 'forgotPassword',

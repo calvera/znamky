@@ -89,15 +89,21 @@ final class AuthOpenApiFactory implements OpenApiFactoryInterface
                 (string) HttpResponse::HTTP_TOO_MANY_REQUESTS => $this->tooManyRequestsResponse(),
             ],
             summary: 'Register a new user',
-            description: 'Creates an unverified user and sends a verification token by email. Re-registering an unverified email rotates and resends the token. Verified emails return 422. The account password is set later via verify-email. Rate limited per client IP.',
+            description: 'Creates an unverified user and sends a verification token by email. Optional locale (en default, cs) selects the email language. Re-registering an unverified email rotates and resends the token. Verified emails return 422. The account password is set later via verify-email. Rate limited per client IP.',
             requestBody: new RequestBody(
-                description: 'Registration email',
+                description: 'Registration email and optional email locale',
                 content: new \ArrayObject([
                     'application/json' => new MediaType(schema: new \ArrayObject([
                         'type' => 'object',
                         'required' => ['email'],
                         'properties' => [
                             'email' => ['type' => 'string', 'format' => 'email'],
+                            'locale' => [
+                                'type' => 'string',
+                                'enum' => ['en', 'cs'],
+                                'default' => 'en',
+                                'description' => 'Language for the verification email',
+                            ],
                         ],
                     ])),
                 ]),
@@ -154,15 +160,21 @@ final class AuthOpenApiFactory implements OpenApiFactoryInterface
                 (string) HttpResponse::HTTP_TOO_MANY_REQUESTS => $this->tooManyRequestsResponse(),
             ],
             summary: 'Request password reset email',
-            description: 'If the email belongs to a user, sends a reset token by email. Rate limited per client IP.',
+            description: 'If the email belongs to a user, sends a reset token by email. Optional locale (en default, cs) selects the email language. Rate limited per client IP.',
             requestBody: new RequestBody(
-                description: 'Account email',
+                description: 'Account email and optional email locale',
                 content: new \ArrayObject([
                     'application/json' => new MediaType(schema: new \ArrayObject([
                         'type' => 'object',
                         'required' => ['email'],
                         'properties' => [
                             'email' => ['type' => 'string', 'format' => 'email'],
+                            'locale' => [
+                                'type' => 'string',
+                                'enum' => ['en', 'cs'],
+                                'default' => 'en',
+                                'description' => 'Language for the password-reset email',
+                            ],
                         ],
                     ])),
                 ]),

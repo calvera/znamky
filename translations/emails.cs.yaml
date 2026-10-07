@@ -1,0 +1,16 @@
+brand: Znamky
+verify_email:
+    subject: 'Ověření e-mailu'
+    title: 'Ověření e-mailu'
+    intro: 'Zadejte níže uvedený kód v aplikaci pro ověření e-mailu a nastavení hesla.'
+    token_label: 'Ověřovací kód'
+    expiry: 'Tento kód vyprší za 24 hodin.'
+    disclaimer: 'Pokud jste si účet nevytvořili, můžete tento e-mail ignorovat.'
+reset_password:
+    subject: 'Obnovení hesla'
+    title: 'Obnovení hesla'
+    intro: 'Zadejte níže uvedený kód v aplikaci pro nastavení nového hesla.'
+    token_label: 'Kód pro obnovení'
+    expiry: 'Tento kód vyprší za 1 hodinu.'
+    disclaimer: 'Pokud jste o obnovení hesla nežádali, můžete tento e-mail ignorovat.'
+footer: 'Tuto zprávu odeslala služba Znamky.'

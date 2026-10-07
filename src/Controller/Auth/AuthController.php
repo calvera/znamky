@@ -73,7 +73,7 @@ final class AuthController extends AbstractController
         ForgotPasswordRequest $request,
         PasswordResetService $passwordResetService,
     ): Response {
-        $passwordResetService->requestReset($request->email);
+        $passwordResetService->requestReset($request->email, $request->locale);
 
         return new Response(status: Response::HTTP_NO_CONTENT);
     }

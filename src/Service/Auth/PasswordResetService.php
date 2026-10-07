@@ -23,7 +23,7 @@ final class PasswordResetService
     ) {
     }
 
-    public function requestReset(string $email): void
+    public function requestReset(string $email, string $locale = 'en'): void
     {
         $user = $this->userRepository->findOneByEmail($email);
         if (null === $user) {
@@ -36,9 +36,9 @@ final class PasswordResetService
 
         // Replacing the stored token before the email is accepted burns the
         // previous link when SMTP fails. Roll that replacement back with the send.
-        $this->entityManager->wrapInTransaction(function () use ($user, $rawToken): void {
+        $this->entityManager->wrapInTransaction(function () use ($user, $rawToken, $locale): void {
             $this->userRepository->save($user);
-            $this->authMailer->sendPasswordReset($user, $rawToken);
+            $this->authMailer->sendPasswordReset($user, $rawToken, $locale);
         });
     }
 

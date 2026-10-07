@@ -26,11 +26,14 @@ final class ForgotPasswordMutationResolver implements MutationResolverInterface
 
         $input = $this->inputValidator->input($context);
         $request = new ForgotPasswordRequest(
-            $this->inputValidator->string($input, 'email'),
+            email: $this->inputValidator->string($input, 'email'),
+            locale: \array_key_exists('locale', $input)
+                ? $this->inputValidator->string($input, 'locale')
+                : 'en',
         );
         $this->inputValidator->validate($request);
 
-        $this->passwordResetService->requestReset($request->email);
+        $this->passwordResetService->requestReset($request->email, $request->locale);
 
         return Auth::success();
     }

@@ -1,11 +1,24 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Verify your email</title>
-</head>
-<body>
-    <p>Use this token with <code>POST /api/verify-email</code>, together with the password you want on the account:</p>
-    <p><strong>{{ token }}</strong></p>
-</body>
-</html>
+{% extends 'email/base.html.twig' %}
+
+{% block title %}{{ 'verify_email.subject'|trans({}, 'emails') }}{% endblock %}
+
+{% block body %}
+    <h1 style="margin:0 0 16px;font-size:22px;font-weight:600;line-height:1.3;color:#1a1f24;">
+        {{ 'verify_email.title'|trans({}, 'emails') }}
+    </h1>
+    <p style="margin:0 0 24px;font-size:15px;line-height:1.55;color:#374151;">
+        {{ 'verify_email.intro'|trans({}, 'emails') }}
+    </p>
+    <p style="margin:0 0 8px;font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:#6b7280;">
+        {{ 'verify_email.token_label'|trans({}, 'emails') }}
+    </p>
+    <p style="margin:0 0 24px;padding:16px;background-color:#f3f4f6;border-radius:6px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:14px;line-height:1.5;word-break:break-all;color:#1a1f24;">
+        {{ token }}
+    </p>
+    <p style="margin:0 0 16px;font-size:14px;line-height:1.5;color:#6b7280;">
+        {{ 'verify_email.expiry'|trans({}, 'emails') }}
+    </p>
+    <p style="margin:0;font-size:13px;line-height:1.5;color:#9ca3af;">
+        {{ 'verify_email.disclaimer'|trans({}, 'emails') }}
+    </p>
+{% endblock %}

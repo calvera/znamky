@@ -21,8 +21,10 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Mailer\Envelope;
 use Symfony\Component\Mailer\Exception\TransportException;
 use Symfony\Component\Mailer\MailerInterface;
+use Symfony\Component\Mime\Email;
 use Symfony\Component\Mime\RawMessage;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
+use Symfony\Contracts\Translation\TranslatorInterface;
 
 final class AuthTest extends WebTestCase
 {
@@ -88,7 +90,7 @@ final class AuthTest extends WebTestCase
                 {
                     throw new TransportException('SMTP down');
                 }
-            }, 'noreply@znamky.local'),
+            }, static::getContainer()->get(TranslatorInterface::class), 'noreply@znamky.local'),
             static::getContainer()->get(UserPasswordHasherInterface::class),
             static::getContainer()->get(RevokeRefreshTokenManagerInterface::class),
         );
@@ -147,6 +149,80 @@ final class AuthTest extends WebTestCase
             self::fail('Expected roles array.');
         }
         self::assertContains('ROLE_USER', $roles);
+    }
+
+    public function testRegisterEmailDefaultsToEnglish(): void
+    {
+        $this->jsonRequest('POST', '/api/register', [
+            'email' => 'locale-en@example.com',
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
+        self::assertEmailCount(1);
+
+        $email = self::getMailerMessage();
+        self::assertInstanceOf(Email::class, $email);
+        self::assertSame('Verify your email', $email->getSubject());
+        $html = $email->getHtmlBody();
+        self::assertIsString($html);
+        self::assertStringContainsString('Verification code', $html);
+        self::assertStringContainsString($this->extractTokenFromLastEmail(), $html);
+    }
+
+    public function testRegisterEmailUsesCzechLocale(): void
+    {
+        $this->jsonRequest('POST', '/api/register', [
+            'email' => 'locale-cs@example.com',
+            'locale' => 'cs',
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
+        self::assertEmailCount(1);
+
+        $email = self::getMailerMessage();
+        self::assertInstanceOf(Email::class, $email);
+        self::assertSame('Ověření e-mailu', $email->getSubject());
+        $html = $email->getHtmlBody();
+        self::assertIsString($html);
+        self::assertStringContainsString('Ověřovací kód', $html);
+        self::assertStringContainsString($this->extractTokenFromLastEmail(), $html);
+    }
+
+    public function testRegisterInvalidLocaleReturns422(): void
+    {
+        $this->jsonRequest('POST', '/api/register', [
+            'email' => 'locale-bad@example.com',
+            'locale' => 'de',
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
+        self::assertEmailCount(0);
+    }
+
+    public function testForgotPasswordEmailUsesCzechLocale(): void
+    {
+        $emailAddress = 'reset-locale-cs@example.com';
+        $this->registerAndVerify($emailAddress, 'password123');
+
+        $this->jsonRequest('POST', '/api/forgot-password', [
+            'email' => $emailAddress,
+            'locale' => 'cs',
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+
+        $email = self::getMailerMessage();
+        self::assertInstanceOf(Email::class, $email);
+        self::assertSame('Obnovení hesla', $email->getSubject());
+        $html = $email->getHtmlBody();
+        self::assertIsString($html);
+        self::assertStringContainsString('Kód pro obnovení', $html);
+        self::assertStringContainsString($this->extractTokenFromLastEmail(), $html);
+    }
+
+    public function testForgotPasswordInvalidLocaleReturns422(): void
+    {
+        $this->jsonRequest('POST', '/api/forgot-password', [
+            'email' => 'nobody@example.com',
+            'locale' => 'fr',
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
     }
 
     public function testLoginAcceptsEmailCasingUsedAtRegistration(): void

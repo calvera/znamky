@@ -1,1027 +1,1567 @@
-openapi: 3.2.0
-info:
-  title: 'Znamky API'
-  description: |-
-    JSON API for Znamky.
-
-    Authenticate with `POST /api/login` (verified users only), then send
-    `Authorization: Bearer <token>`. Refresh via `POST /api/token/refresh`.
-
-    Validation errors for auth request DTOs return **422** with a
-    `ValidationFailed` body (`title`, `detail`, `violations[]`).
-
-    GraphQL: `POST /api/graphql` (public entrypoint; auth mutations plus
-    JWT-protected stamp catalog queries), IDE at `/api/graphql/graphiql`.
-
-    Human docs: `docs/auth.md` (auth), `docs/stamps.md` (stamp catalog).
-  version: 1.0.0
-servers:
-  -
-    url: /
-    description: ''
-paths:
-  /api/forgot-password:
-    post:
-      operationId: api_forgot_password_post
-      tags:
-        - Authentication
-      responses:
-        '204':
-          description: 'Always returned; does not reveal whether the email exists'
-        '422':
-          description: 'Validation failed (invalid email)'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ValidationFailed'
-        '429':
-          description: 'Rate limit exceeded (Retry-After header set)'
-      summary: 'Request password reset email'
-      description: 'If the email belongs to a user, sends a reset token by email. Rate limited per client IP.'
-      requestBody:
-        description: 'Account email'
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - email
-              properties:
-                email:
-                  type: string
-                  format: email
-        required: true
-      security: []
-  /api/logout:
-    post:
-      operationId: api_logout_post
-      tags:
-        - Authentication
-      responses:
-        '204':
-          description: 'Logged out'
-        '401':
-          description: 'Missing or invalid JWT'
-      summary: Logout
-      description: 'Blocklists the current JWT. If `refresh_token` is sent, that refresh token is revoked; otherwise all refresh tokens for the user are revoked.'
-      requestBody:
-        description: 'Optional refresh token to revoke (omit to revoke all for the user)'
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                refresh_token:
-                  type: string
-                  nullable: true
-        required: false
-      security:
-        -
-          JWT: []
-  /api/me:
-    get:
-      operationId: api_me_get
-      tags:
-        - Authentication
-      responses:
-        '200':
-          description: 'Current user'
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - id
-                  - email
-                  - roles
-                properties:
-                  id: { type: integer }
-                  email: { type: string, format: email }
-                  roles: { type: array, items: { type: string } }
-        '401':
-          description: 'Missing or invalid JWT'
-      summary: 'Current user'
-      description: 'Returns the authenticated user profile.'
-      security:
-        -
-          JWT: []
-  /api/register:
-    post:
-      operationId: api_register_post
-      tags:
-        - Authentication
-      responses:
-        '201':
-          description: 'User created (email not verified yet)'
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - id
-                  - email
-                properties:
-                  id: { type: integer }
-                  email: { type: string, format: email }
-        '422':
-          description: 'Validation failed (invalid or duplicate email)'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ValidationFailed'
-        '429':
-          description: 'Rate limit exceeded (Retry-After header set)'
-      summary: 'Register a new user'
-      description: 'Creates an unverified user and sends a verification token by email. Re-registering an unverified email rotates and resends the token. Verified emails return 422. The account password is set later via verify-email. Rate limited per client IP.'
-      requestBody:
-        description: 'Registration email'
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - email
-              properties:
-                email:
-                  type: string
-                  format: email
-        required: true
-      security: []
-  /api/reset-password:
-    post:
-      operationId: api_reset_password_post
-      tags:
-        - Authentication
-      responses:
-        '204':
-          description: 'Password updated'
-        '422':
-          description: 'Invalid payload, or invalid/expired token'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ValidationFailed'
-        '429':
-          description: 'Rate limit exceeded (Retry-After header set)'
-      summary: 'Reset password with email token'
-      description: 'Sets a new password using the raw token from the reset email. Revokes all refresh tokens for the user. Does not verify the email; an unverified account must still confirm the original verification token. Rate limited per client IP.'
-      requestBody:
-        description: 'Reset token and new password'
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - token
-                - password
-              properties:
-                token:
-                  type: string
-                password:
-                  type: string
-                  minLength: 8
-        required: true
-      security: []
-  /api/verify-email:
-    post:
-      operationId: api_verify_email_post
-      tags:
-        - Authentication
-      responses:
-        '204':
-          description: 'Email verified and password set'
-        '422':
-          description: 'Invalid payload, or invalid/expired token'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ValidationFailed'
-        '429':
-          description: 'Rate limit exceeded (Retry-After header set)'
-      summary: 'Verify email address'
-      description: 'Confirms the account using the raw token from the verification email and sets the account password. Rate limited per client IP.'
-      requestBody:
-        description: 'Verification token and the password chosen by the mailbox owner'
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - token
-                - password
-              properties:
-                token:
-                  type: string
-                password:
-                  type: string
-                  minLength: 8
-        required: true
-      security: []
-  /api/login:
-    post:
-      operationId: login_check_post
-      tags:
-        - 'Login Check'
-      responses:
-        '200':
-          description: 'User token created'
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  token: { readOnly: true, type: string, nullable: false }
-                  refresh_token: { readOnly: true, type: string, nullable: false }
-                required:
-                  - token
-      summary: 'Creates a user token.'
-      description: 'Creates a user token.'
-      requestBody:
-        description: 'The login data'
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                email:
-                  type: string
-                  nullable: false
-                password:
-                  type: string
-                  nullable: false
-              required:
-                - email
-                - password
-        required: true
-  /api/token/refresh:
-    post:
-      operationId: gesdinet_jwt_refresh_token_post
-      tags:
-        - 'Login Check'
-      responses:
-        '200':
-          description: 'JWT refreshed'
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  token: { readOnly: true, type: string, nullable: false }
-                  refresh_token: { readOnly: true, type: string, nullable: false }
-                required:
-                  - token
-        '401':
-          description: 'The refresh token is missing, unknown or has expired'
-      summary: 'Exchanges a refresh token for a new JWT.'
-      description: 'Returns a new JWT, and a refresh token to use for the next exchange.'
-      requestBody:
-        description: 'The refresh token issued alongside the JWT being replaced'
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                refresh_token:
-                  type: string
-                  nullable: false
-              required:
-                - refresh_token
-        required: true
-  /api/stamps:
-    get:
-      operationId: api_stamps_get_collection
-      tags:
-        - Stamp
-      responses:
-        '200':
-          description: 'Stamp collection'
-          content:
-            application/ld+json:
-              schema:
-                type: object
-                description: 'Stamp.jsonld-stamp.read collection.'
-                allOf:
-                  - { $ref: '#/components/schemas/HydraCollectionBaseSchema' }
-                  - { type: object, required: [member], properties: { member: { type: array, items: { $ref: '#/components/schemas/Stamp.jsonld-stamp.read' } } } }
-      summary: 'Retrieves the collection of Stamp resources.'
-      description: 'Retrieves the collection of Stamp resources.'
-      parameters:
-        -
-          name: page
-          in: query
-          description: 'The collection page number'
-          required: false
-          deprecated: false
-          schema:
-            type: integer
-            default: 1
-          style: form
-          explode: true
-        -
-          name: name
-          in: query
-          description: 'Stamp name'
-          required: false
-          deprecated: false
-          schema:
-            type: string
-          style: form
-          explode: true
-        -
-          name: 'name[]'
-          in: query
-          description: 'Stamp name'
-          required: false
-          deprecated: false
-          schema:
-            type: array
-            items:
-              type: string
-          style: deepObject
-          explode: true
-        -
-          name: country
-          in: query
-          description: 'Stamp country'
-          required: false
-          deprecated: false
-          schema:
-            type: string
-          style: form
-          explode: true
-        -
-          name: 'country[]'
-          in: query
-          description: 'Stamp country'
-          required: false
-          deprecated: false
-          schema:
-            type: array
-            items:
-              type: string
-          style: deepObject
-          explode: true
-        -
-          name: type
-          in: query
-          description: 'Stamp type'
-          required: false
-          deprecated: false
-          schema:
-            type: string
-          style: form
-          explode: true
-        -
-          name: 'type[]'
-          in: query
-          description: 'Stamp type'
-          required: false
-          deprecated: false
-          schema:
-            type: array
-            items:
-              type: string
-          style: deepObject
-          explode: true
-        -
-          name: number
-          in: query
-          description: 'Stamp number'
-          required: false
-          deprecated: false
-          schema:
-            type: string
-          style: form
-          explode: true
-        -
-          name: 'number[]'
-          in: query
-          description: 'Stamp number'
-          required: false
-          deprecated: false
-          schema:
-            type: array
-            items:
-              type: string
-          style: deepObject
-          explode: true
-        -
-          name: order
-          in: query
-          description: 'Stamp order'
-          required: false
-          deprecated: false
-          schema:
-            type: object
-            properties:
-              number:
-                type: string
-                enum:
-                  - asc
-                  - desc
-                  - ASC
-                  - DESC
-            additionalProperties: false
-          style: form
-          explode: true
-  '/api/stamps/{id}':
-    get:
-      operationId: api_stamps_id_get
-      tags:
-        - Stamp
-      responses:
-        '200':
-          description: 'Stamp resource'
-          content:
-            application/ld+json:
-              schema:
-                $ref: '#/components/schemas/Stamp.jsonld-stamp.read'
-        '404':
-          description: 'Not found'
-          content:
-            application/ld+json:
-              schema:
-                $ref: '#/components/schemas/Error.jsonld'
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Error'
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-          links: {}
-      summary: 'Retrieves a Stamp resource.'
-      description: 'Retrieves a Stamp resource.'
-      parameters:
-        -
-          name: id
-          in: path
-          description: 'Stamp identifier'
-          required: true
-          deprecated: false
-          schema:
-            type: string
-          style: simple
-          explode: false
-  /api/stamp_places:
-    get:
-      operationId: api_stamp_places_get_collection
-      tags:
-        - StampPlace
-      responses:
-        '200':
-          description: 'StampPlace collection'
-          content:
-            application/ld+json:
-              schema:
-                type: object
-                description: 'StampPlace.jsonld-stamp_place.read collection.'
-                allOf:
-                  - { $ref: '#/components/schemas/HydraCollectionBaseSchema' }
-                  - { type: object, required: [member], properties: { member: { type: array, items: { $ref: '#/components/schemas/StampPlace.jsonld-stamp_place.read' } } } }
-      summary: 'Retrieves the collection of StampPlace resources.'
-      description: 'Retrieves the collection of StampPlace resources.'
-      parameters:
-        -
-          name: page
-          in: query
-          description: 'The collection page number'
-          required: false
-          deprecated: false
-          schema:
-            type: integer
-            default: 1
-          style: form
-          explode: true
-        -
-          name: name
-          in: query
-          description: 'StampPlace name'
-          required: false
-          deprecated: false
-          schema:
-            type: string
-          style: form
-          explode: true
-        -
-          name: 'name[]'
-          in: query
-          description: 'StampPlace name'
-          required: false
-          deprecated: false
-          schema:
-            type: array
-            items:
-              type: string
-          style: deepObject
-          explode: true
-  '/api/stamp_places/{id}':
-    get:
-      operationId: api_stamp_places_id_get
-      tags:
-        - StampPlace
-      responses:
-        '200':
-          description: 'StampPlace resource'
-          content:
-            application/ld+json:
-              schema:
-                $ref: '#/components/schemas/StampPlace.jsonld-stamp_place.read'
-        '404':
-          description: 'Not found'
-          content:
-            application/ld+json:
-              schema:
-                $ref: '#/components/schemas/Error.jsonld'
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Error'
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-          links: {}
-      summary: 'Retrieves a StampPlace resource.'
-      description: 'Retrieves a StampPlace resource.'
-      parameters:
-        -
-          name: id
-          in: path
-          description: 'StampPlace identifier'
-          required: true
-          deprecated: false
-          schema:
-            type: string
-          style: simple
-          explode: false
-  /api/stamp_tags:
-    get:
-      operationId: api_stamp_tags_get_collection
-      tags:
-        - StampTag
-      responses:
-        '200':
-          description: 'StampTag collection'
-          content:
-            application/ld+json:
-              schema:
-                type: object
-                description: 'StampTag.jsonld-stamp_tag.read collection.'
-                allOf:
-                  - { $ref: '#/components/schemas/HydraCollectionBaseSchema' }
-                  - { type: object, required: [member], properties: { member: { type: array, items: { $ref: '#/components/schemas/StampTag.jsonld-stamp_tag.read' } } } }
-      summary: 'Retrieves the collection of StampTag resources.'
-      description: 'Retrieves the collection of StampTag resources.'
-      parameters:
-        -
-          name: page
-          in: query
-          description: 'The collection page number'
-          required: false
-          deprecated: false
-          schema:
-            type: integer
-            default: 1
-          style: form
-          explode: true
-        -
-          name: name
-          in: query
-          description: 'StampTag name'
-          required: false
-          deprecated: false
-          schema:
-            type: string
-          style: form
-          explode: true
-        -
-          name: 'name[]'
-          in: query
-          description: 'StampTag name'
-          required: false
-          deprecated: false
-          schema:
-            type: array
-            items:
-              type: string
-          style: deepObject
-          explode: true
-        -
-          name: slug
-          in: query
-          description: 'StampTag slug'
-          required: false
-          deprecated: false
-          schema:
-            type: string
-          style: form
-          explode: true
-        -
-          name: 'slug[]'
-          in: query
-          description: 'StampTag slug'
-          required: false
-          deprecated: false
-          schema:
-            type: array
-            items:
-              type: string
-          style: deepObject
-          explode: true
-  '/api/stamp_tags/{id}':
-    get:
-      operationId: api_stamp_tags_id_get
-      tags:
-        - StampTag
-      responses:
-        '200':
-          description: 'StampTag resource'
-          content:
-            application/ld+json:
-              schema:
-                $ref: '#/components/schemas/StampTag.jsonld-stamp_tag.read'
-        '404':
-          description: 'Not found'
-          content:
-            application/ld+json:
-              schema:
-                $ref: '#/components/schemas/Error.jsonld'
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Error'
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-          links: {}
-      summary: 'Retrieves a StampTag resource.'
-      description: 'Retrieves a StampTag resource.'
-      parameters:
-        -
-          name: id
-          in: path
-          description: 'StampTag identifier'
-          required: true
-          deprecated: false
-          schema:
-            type: string
-          style: simple
-          explode: false
-components:
-  schemas:
-    Error:
-      type: object
-      description: 'A representation of common errors.'
-      properties:
-        title:
-          readOnly: true
-          description: 'A short, human-readable summary of the problem.'
-          type:
-            - string
-            - 'null'
-        detail:
-          readOnly: true
-          description: 'A human-readable explanation specific to this occurrence of the problem.'
-          type:
-            - string
-            - 'null'
-        status:
-          type:
-            - integer
-            - 'null'
-          examples:
-            - 404
-          default: 400
-        instance:
-          readOnly: true
-          description: 'A URI reference that identifies the specific occurrence of the problem. It may or may not yield further information if dereferenced.'
-          type:
-            - string
-            - 'null'
-        type:
-          readOnly: true
-          description: 'A URI reference that identifies the problem type'
-          type: string
-    Error.jsonld:
-      allOf:
-        -
-          $ref: '#/components/schemas/HydraItemBaseSchema'
-        -
-          type: object
-          properties:
-            title:
-              readOnly: true
-              description: 'A short, human-readable summary of the problem.'
-              type:
-                - string
-                - 'null'
-            detail:
-              readOnly: true
-              description: 'A human-readable explanation specific to this occurrence of the problem.'
-              type:
-                - string
-                - 'null'
-            status:
-              type:
-                - integer
-                - 'null'
-              examples:
-                - 404
-              default: 400
-            instance:
-              readOnly: true
-              description: 'A URI reference that identifies the specific occurrence of the problem. It may or may not yield further information if dereferenced.'
-              type:
-                - string
-                - 'null'
-            type:
-              readOnly: true
-              description: 'A URI reference that identifies the problem type'
-              type: string
-            description:
-              readOnly: true
-              type:
-                - string
-                - 'null'
-      description: 'A representation of common errors.'
-    HydraCollectionBaseSchema:
-      allOf:
-        -
-          $ref: '#/components/schemas/HydraCollectionBaseSchemaNoPagination'
-        -
-          type: object
-          properties:
-            view:
-              type: object
-              properties:
-                '@id':
-                  type: string
-                  format: iri-reference
-                '@type':
-                  type: string
-                first:
-                  type: [string, 'null']
-                  format: iri-reference
-                last:
-                  type: [string, 'null']
-                  format: iri-reference
-                previous:
-                  type: [string, 'null']
-                  format: iri-reference
-                next:
-                  type: [string, 'null']
-                  format: iri-reference
-              example:
-                '@id': string
-                '@type': string
-                first: string
-                last: string
-                previous: string
-                next: string
-    HydraCollectionBaseSchemaNoPagination:
-      type: object
-      properties:
-        totalItems:
-          type: integer
-          minimum: 0
-        search:
-          type: object
-          properties:
-            '@type':
-              type: string
-            template:
-              type: string
-            variableRepresentation:
-              type: string
-            mapping:
-              type: array
-              items:
-                type: object
-                properties:
-                  '@type': { type: string }
-                  variable: { type: string }
-                  property: { type: [string, 'null'] }
-                  required: { type: boolean }
-    HydraItemBaseSchema:
-      type: object
-      properties:
-        '@context':
-          oneOf:
-            -
-              type: string
-            -
-              type: object
-              properties:
-                '@vocab':
-                  type: string
-                hydra:
-                  type: string
-                  enum: ['http://www.w3.org/ns/hydra/core#']
-              required:
-                - '@vocab'
-                - hydra
-              additionalProperties: true
-        '@id':
-          type: string
-        '@type':
-          type: string
-      required:
-        - '@id'
-        - '@type'
-    Stamp.jsonld-stamp.read:
-      allOf:
-        -
-          $ref: '#/components/schemas/HydraItemBaseSchema'
-        -
-          type: object
-          properties:
-            id:
-              readOnly: true
-              type: integer
-            number:
-              minimum: 0
-              exclusiveMinimum: 0
-              default: 0
-              type: integer
-            name:
-              default: ''
-              type: string
-            country:
-              default: CZ
-              type: string
-              enum:
-                - CZ
-                - SK
-            type:
-              default: regular
-              type: string
-              enum:
-                - regular
-                - annual
-            district:
-              type:
-                - string
-                - 'null'
-            region:
-              type:
-                - string
-                - 'null'
-            latitude:
-              type:
-                - string
-                - 'null'
-            longitude:
-              type:
-                - string
-                - 'null'
-            tags:
-              type: array
-              items:
-                $ref: '#/components/schemas/StampTag.jsonld-stamp.read'
-            places:
-              type: array
-              items:
-                $ref: '#/components/schemas/StampPlace.jsonld-stamp.read'
-          required:
-            - name
-    StampPlace.jsonld-stamp.read:
-      allOf:
-        -
-          $ref: '#/components/schemas/HydraItemBaseSchema'
-        -
-          type: object
-          properties:
-            id:
-              readOnly: true
-              type: integer
-            name:
-              default: ''
-              type: string
-            url:
-              description: 'Empty string when the CSV line has no web URL (keeps the catalog key stable).'
-              default: ''
-              type: string
-            latitude:
-              type:
-                - string
-                - 'null'
-            longitude:
-              type:
-                - string
-                - 'null'
-          required:
-            - name
-    StampPlace.jsonld-stamp_place.read:
-      allOf:
-        -
-          $ref: '#/components/schemas/HydraItemBaseSchema'
-        -
-          type: object
-          properties:
-            id:
-              readOnly: true
-              type: integer
-            name:
-              default: ''
-              type: string
-            url:
-              description: 'Empty string when the CSV line has no web URL (keeps the catalog key stable).'
-              default: ''
-              type: string
-            latitude:
-              type:
-                - string
-                - 'null'
-            longitude:
-              type:
-                - string
-                - 'null'
-          required:
-            - name
-    StampTag.jsonld-stamp.read:
-      allOf:
-        -
-          $ref: '#/components/schemas/HydraItemBaseSchema'
-        -
-          type: object
-          properties:
-            id:
-              readOnly: true
-              type: integer
-            name:
-              default: ''
-              type: string
-            slug:
-              default: ''
-              type: string
-          required:
-            - name
-            - slug
-    StampTag.jsonld-stamp_tag.read:
-      allOf:
-        -
-          $ref: '#/components/schemas/HydraItemBaseSchema'
-        -
-          type: object
-          properties:
-            id:
-              readOnly: true
-              type: integer
-            name:
-              default: ''
-              type: string
-            slug:
-              default: ''
-              type: string
-          required:
-            - name
-            - slug
-    ValidationFailed:
-      type: object
-      required:
-        - title
-        - detail
-        - violations
-      properties:
-        title:
-          type: string
-          example: 'Validation Failed'
-        detail:
-          type: string
-          example: 'The given data failed validation.'
-        violations:
-          type: array
-          items:
-            type: object
-            required:
-              - propertyPath
-              - message
-            properties:
-              propertyPath:
-                type: string
-                example: email
-              message:
-                type: string
-                example: 'This value is not a valid email address.'
-  responses: {}
-  parameters: {}
-  examples: {}
-  requestBodies: {}
-  headers: {}
-  securitySchemes:
-    JWT:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
-security: []
-tags:
-  -
-    name: Stamp
-    description: "Resource 'Stamp' operations."
-  -
-    name: StampPlace
-    description: "Resource 'StampPlace' operations."
-  -
-    name: StampTag
-    description: "Resource 'StampTag' operations."
-  -
-    name: Authentication
-    description: 'Register, verify, login, refresh, logout, and password reset'
-webhooks: {}
+{
+    "openapi": "3.2.0",
+    "info": {
+        "title": "Znamky API",
+        "description": "JSON API for Znamky.\n\nAuthenticate with `POST /api/login` (verified users only), then send\n`Authorization: Bearer <token>`. Refresh via `POST /api/token/refresh`.\n\nValidation errors for auth request DTOs return **422** with a\n`ValidationFailed` body (`title`, `detail`, `violations[]`).\n\nGraphQL: `POST /api/graphql` (public entrypoint; auth mutations plus\nJWT-protected stamp catalog queries), IDE at `/api/graphql/graphiql`.\n\nHuman docs: `docs/auth.md` (auth), `docs/stamps.md` (stamp catalog).",
+        "version": "1.0.0"
+    },
+    "servers": [
+        {
+            "url": "/",
+            "description": ""
+        }
+    ],
+    "paths": {
+        "/api/forgot-password": {
+            "post": {
+                "operationId": "api_forgot_password_post",
+                "tags": [
+                    "Authentication"
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Always returned; does not reveal whether the email exists"
+                    },
+                    "422": {
+                        "description": "Validation failed (invalid email)",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ValidationFailed"
+                                }
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "Rate limit exceeded (Retry-After header set)"
+                    }
+                },
+                "summary": "Request password reset email",
+                "description": "If the email belongs to a user, sends a reset token by email. Optional locale (en default, cs) selects the email language. Rate limited per client IP.",
+                "requestBody": {
+                    "description": "Account email and optional email locale",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "email"
+                                ],
+                                "properties": {
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email"
+                                    },
+                                    "locale": {
+                                        "type": "string",
+                                        "enum": [
+                                            "en",
+                                            "cs"
+                                        ],
+                                        "default": "en",
+                                        "description": "Language for the password-reset email"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": []
+            }
+        },
+        "/api/logout": {
+            "post": {
+                "operationId": "api_logout_post",
+                "tags": [
+                    "Authentication"
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Logged out"
+                    },
+                    "401": {
+                        "description": "Missing or invalid JWT"
+                    }
+                },
+                "summary": "Logout",
+                "description": "Blocklists the current JWT. If `refresh_token` is sent, that refresh token is revoked; otherwise all refresh tokens for the user are revoked.",
+                "requestBody": {
+                    "description": "Optional refresh token to revoke (omit to revoke all for the user)",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "refresh_token": {
+                                        "type": "string",
+                                        "nullable": true
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "required": false
+                },
+                "security": [
+                    {
+                        "JWT": []
+                    }
+                ]
+            }
+        },
+        "/api/me": {
+            "get": {
+                "operationId": "api_me_get",
+                "tags": [
+                    "Authentication"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Current user",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "id",
+                                        "email",
+                                        "roles"
+                                    ],
+                                    "properties": {
+                                        "id": {
+                                            "type": "integer"
+                                        },
+                                        "email": {
+                                            "type": "string",
+                                            "format": "email"
+                                        },
+                                        "roles": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Missing or invalid JWT"
+                    }
+                },
+                "summary": "Current user",
+                "description": "Returns the authenticated user profile.",
+                "security": [
+                    {
+                        "JWT": []
+                    }
+                ]
+            }
+        },
+        "/api/register": {
+            "post": {
+                "operationId": "api_register_post",
+                "tags": [
+                    "Authentication"
+                ],
+                "responses": {
+                    "201": {
+                        "description": "User created (email not verified yet)",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "id",
+                                        "email"
+                                    ],
+                                    "properties": {
+                                        "id": {
+                                            "type": "integer"
+                                        },
+                                        "email": {
+                                            "type": "string",
+                                            "format": "email"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation failed (invalid or duplicate email)",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ValidationFailed"
+                                }
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "Rate limit exceeded (Retry-After header set)"
+                    }
+                },
+                "summary": "Register a new user",
+                "description": "Creates an unverified user and sends a verification token by email. Optional locale (en default, cs) selects the email language. Re-registering an unverified email rotates and resends the token. Verified emails return 422. The account password is set later via verify-email. Rate limited per client IP.",
+                "requestBody": {
+                    "description": "Registration email and optional email locale",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "email"
+                                ],
+                                "properties": {
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email"
+                                    },
+                                    "locale": {
+                                        "type": "string",
+                                        "enum": [
+                                            "en",
+                                            "cs"
+                                        ],
+                                        "default": "en",
+                                        "description": "Language for the verification email"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": []
+            }
+        },
+        "/api/reset-password": {
+            "post": {
+                "operationId": "api_reset_password_post",
+                "tags": [
+                    "Authentication"
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Password updated"
+                    },
+                    "422": {
+                        "description": "Invalid payload, or invalid/expired token",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ValidationFailed"
+                                }
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "Rate limit exceeded (Retry-After header set)"
+                    }
+                },
+                "summary": "Reset password with email token",
+                "description": "Sets a new password using the raw token from the reset email. Revokes all refresh tokens for the user. Does not verify the email; an unverified account must still confirm the original verification token. Rate limited per client IP.",
+                "requestBody": {
+                    "description": "Reset token and new password",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "token",
+                                    "password"
+                                ],
+                                "properties": {
+                                    "token": {
+                                        "type": "string"
+                                    },
+                                    "password": {
+                                        "type": "string",
+                                        "minLength": 8
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": []
+            }
+        },
+        "/api/verify-email": {
+            "post": {
+                "operationId": "api_verify_email_post",
+                "tags": [
+                    "Authentication"
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Email verified and password set"
+                    },
+                    "422": {
+                        "description": "Invalid payload, or invalid/expired token",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ValidationFailed"
+                                }
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "Rate limit exceeded (Retry-After header set)"
+                    }
+                },
+                "summary": "Verify email address",
+                "description": "Confirms the account using the raw token from the verification email and sets the account password. Rate limited per client IP.",
+                "requestBody": {
+                    "description": "Verification token and the password chosen by the mailbox owner",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "token",
+                                    "password"
+                                ],
+                                "properties": {
+                                    "token": {
+                                        "type": "string"
+                                    },
+                                    "password": {
+                                        "type": "string",
+                                        "minLength": 8
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": []
+            }
+        },
+        "/api/login": {
+            "post": {
+                "operationId": "login_check_post",
+                "tags": [
+                    "Login Check"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "User token created",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "token": {
+                                            "readOnly": true,
+                                            "type": "string",
+                                            "nullable": false
+                                        },
+                                        "refresh_token": {
+                                            "readOnly": true,
+                                            "type": "string",
+                                            "nullable": false
+                                        }
+                                    },
+                                    "required": [
+                                        "token"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                },
+                "summary": "Creates a user token.",
+                "description": "Creates a user token.",
+                "requestBody": {
+                    "description": "The login data",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "email": {
+                                        "type": "string",
+                                        "nullable": false
+                                    },
+                                    "password": {
+                                        "type": "string",
+                                        "nullable": false
+                                    }
+                                },
+                                "required": [
+                                    "email",
+                                    "password"
+                                ]
+                            }
+                        }
+                    },
+                    "required": true
+                }
+            }
+        },
+        "/api/token/refresh": {
+            "post": {
+                "operationId": "gesdinet_jwt_refresh_token_post",
+                "tags": [
+                    "Login Check"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "JWT refreshed",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "token": {
+                                            "readOnly": true,
+                                            "type": "string",
+                                            "nullable": false
+                                        },
+                                        "refresh_token": {
+                                            "readOnly": true,
+                                            "type": "string",
+                                            "nullable": false
+                                        }
+                                    },
+                                    "required": [
+                                        "token"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "The refresh token is missing, unknown or has expired"
+                    }
+                },
+                "summary": "Exchanges a refresh token for a new JWT.",
+                "description": "Returns a new JWT, and a refresh token to use for the next exchange.",
+                "requestBody": {
+                    "description": "The refresh token issued alongside the JWT being replaced",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "refresh_token": {
+                                        "type": "string",
+                                        "nullable": false
+                                    }
+                                },
+                                "required": [
+                                    "refresh_token"
+                                ]
+                            }
+                        }
+                    },
+                    "required": true
+                }
+            }
+        },
+        "/api/stamps": {
+            "get": {
+                "operationId": "api_stamps_get_collection",
+                "tags": [
+                    "Stamp"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Stamp collection",
+                        "content": {
+                            "application/ld+json": {
+                                "schema": {
+                                    "type": "object",
+                                    "description": "Stamp.jsonld-stamp.read collection.",
+                                    "allOf": [
+                                        {
+                                            "$ref": "#/components/schemas/HydraCollectionBaseSchema"
+                                        },
+                                        {
+                                            "type": "object",
+                                            "required": [
+                                                "member"
+                                            ],
+                                            "properties": {
+                                                "member": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "$ref": "#/components/schemas/Stamp.jsonld-stamp.read"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                },
+                "summary": "Retrieves the collection of Stamp resources.",
+                "description": "Retrieves the collection of Stamp resources.",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "The collection page number",
+                        "required": false,
+                        "deprecated": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 1
+                        },
+                        "style": "form",
+                        "explode": true
+                    },
+                    {
+                        "name": "name",
+                        "in": "query",
+                        "description": "Stamp name",
+                        "required": false,
+                        "deprecated": false,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "style": "form",
+                        "explode": true
+                    },
+                    {
+                        "name": "name[]",
+                        "in": "query",
+                        "description": "Stamp name",
+                        "required": false,
+                        "deprecated": false,
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "style": "deepObject",
+                        "explode": true
+                    },
+                    {
+                        "name": "country",
+                        "in": "query",
+                        "description": "Stamp country",
+                        "required": false,
+                        "deprecated": false,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "style": "form",
+                        "explode": true
+                    },
+                    {
+                        "name": "country[]",
+                        "in": "query",
+                        "description": "Stamp country",
+                        "required": false,
+                        "deprecated": false,
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "style": "deepObject",
+                        "explode": true
+                    },
+                    {
+                        "name": "type",
+                        "in": "query",
+                        "description": "Stamp type",
+                        "required": false,
+                        "deprecated": false,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "style": "form",
+                        "explode": true
+                    },
+                    {
+                        "name": "type[]",
+                        "in": "query",
+                        "description": "Stamp type",
+                        "required": false,
+                        "deprecated": false,
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "style": "deepObject",
+                        "explode": true
+                    },
+                    {
+                        "name": "number",
+                        "in": "query",
+                        "description": "Stamp number",
+                        "required": false,
+                        "deprecated": false,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "style": "form",
+                        "explode": true
+                    },
+                    {
+                        "name": "number[]",
+                        "in": "query",
+                        "description": "Stamp number",
+                        "required": false,
+                        "deprecated": false,
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "style": "deepObject",
+                        "explode": true
+                    },
+                    {
+                        "name": "order",
+                        "in": "query",
+                        "description": "Stamp order",
+                        "required": false,
+                        "deprecated": false,
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "number": {
+                                    "type": "string",
+                                    "enum": [
+                                        "asc",
+                                        "desc",
+                                        "ASC",
+                                        "DESC"
+                                    ]
+                                }
+                            },
+                            "additionalProperties": false
+                        },
+                        "style": "form",
+                        "explode": true
+                    }
+                ]
+            }
+        },
+        "/api/stamps/{id}": {
+            "get": {
+                "operationId": "api_stamps_id_get",
+                "tags": [
+                    "Stamp"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Stamp resource",
+                        "content": {
+                            "application/ld+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Stamp.jsonld-stamp.read"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "content": {
+                            "application/ld+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error.jsonld"
+                                }
+                            },
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            },
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "links": {}
+                    }
+                },
+                "summary": "Retrieves a Stamp resource.",
+                "description": "Retrieves a Stamp resource.",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "Stamp identifier",
+                        "required": true,
+                        "deprecated": false,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "style": "simple",
+                        "explode": false
+                    }
+                ]
+            }
+        },
+        "/api/stamp_places": {
+            "get": {
+                "operationId": "api_stamp_places_get_collection",
+                "tags": [
+                    "StampPlace"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "StampPlace collection",
+                        "content": {
+                            "application/ld+json": {
+                                "schema": {
+                                    "type": "object",
+                                    "description": "StampPlace.jsonld-stamp_place.read collection.",
+                                    "allOf": [
+                                        {
+                                            "$ref": "#/components/schemas/HydraCollectionBaseSchema"
+                                        },
+                                        {
+                                            "type": "object",
+                                            "required": [
+                                                "member"
+                                            ],
+                                            "properties": {
+                                                "member": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "$ref": "#/components/schemas/StampPlace.jsonld-stamp_place.read"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                },
+                "summary": "Retrieves the collection of StampPlace resources.",
+                "description": "Retrieves the collection of StampPlace resources.",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "The collection page number",
+                        "required": false,
+                        "deprecated": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 1
+                        },
+                        "style": "form",
+                        "explode": true
+                    },
+                    {
+                        "name": "name",
+                        "in": "query",
+                        "description": "StampPlace name",
+                        "required": false,
+                        "deprecated": false,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "style": "form",
+                        "explode": true
+                    },
+                    {
+                        "name": "name[]",
+                        "in": "query",
+                        "description": "StampPlace name",
+                        "required": false,
+                        "deprecated": false,
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "style": "deepObject",
+                        "explode": true
+                    }
+                ]
+            }
+        },
+        "/api/stamp_places/{id}": {
+            "get": {
+                "operationId": "api_stamp_places_id_get",
+                "tags": [
+                    "StampPlace"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "StampPlace resource",
+                        "content": {
+                            "application/ld+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StampPlace.jsonld-stamp_place.read"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "content": {
+                            "application/ld+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error.jsonld"
+                                }
+                            },
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            },
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "links": {}
+                    }
+                },
+                "summary": "Retrieves a StampPlace resource.",
+                "description": "Retrieves a StampPlace resource.",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "StampPlace identifier",
+                        "required": true,
+                        "deprecated": false,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "style": "simple",
+                        "explode": false
+                    }
+                ]
+            }
+        },
+        "/api/stamp_tags": {
+            "get": {
+                "operationId": "api_stamp_tags_get_collection",
+                "tags": [
+                    "StampTag"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "StampTag collection",
+                        "content": {
+                            "application/ld+json": {
+                                "schema": {
+                                    "type": "object",
+                                    "description": "StampTag.jsonld-stamp_tag.read collection.",
+                                    "allOf": [
+                                        {
+                                            "$ref": "#/components/schemas/HydraCollectionBaseSchema"
+                                        },
+                                        {
+                                            "type": "object",
+                                            "required": [
+                                                "member"
+                                            ],
+                                            "properties": {
+                                                "member": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "$ref": "#/components/schemas/StampTag.jsonld-stamp_tag.read"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                },
+                "summary": "Retrieves the collection of StampTag resources.",
+                "description": "Retrieves the collection of StampTag resources.",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "The collection page number",
+                        "required": false,
+                        "deprecated": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 1
+                        },
+                        "style": "form",
+                        "explode": true
+                    },
+                    {
+                        "name": "name",
+                        "in": "query",
+                        "description": "StampTag name",
+                        "required": false,
+                        "deprecated": false,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "style": "form",
+                        "explode": true
+                    },
+                    {
+                        "name": "name[]",
+                        "in": "query",
+                        "description": "StampTag name",
+                        "required": false,
+                        "deprecated": false,
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "style": "deepObject",
+                        "explode": true
+                    },
+                    {
+                        "name": "slug",
+                        "in": "query",
+                        "description": "StampTag slug",
+                        "required": false,
+                        "deprecated": false,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "style": "form",
+                        "explode": true
+                    },
+                    {
+                        "name": "slug[]",
+                        "in": "query",
+                        "description": "StampTag slug",
+                        "required": false,
+                        "deprecated": false,
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "style": "deepObject",
+                        "explode": true
+                    }
+                ]
+            }
+        },
+        "/api/stamp_tags/{id}": {
+            "get": {
+                "operationId": "api_stamp_tags_id_get",
+                "tags": [
+                    "StampTag"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "StampTag resource",
+                        "content": {
+                            "application/ld+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StampTag.jsonld-stamp_tag.read"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "content": {
+                            "application/ld+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error.jsonld"
+                                }
+                            },
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            },
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "links": {}
+                    }
+                },
+                "summary": "Retrieves a StampTag resource.",
+                "description": "Retrieves a StampTag resource.",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "StampTag identifier",
+                        "required": true,
+                        "deprecated": false,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "style": "simple",
+                        "explode": false
+                    }
+                ]
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "Error": {
+                "type": "object",
+                "description": "A representation of common errors.",
+                "properties": {
+                    "title": {
+                        "readOnly": true,
+                        "description": "A short, human-readable summary of the problem.",
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "detail": {
+                        "readOnly": true,
+                        "description": "A human-readable explanation specific to this occurrence of the problem.",
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "status": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ],
+                        "examples": [
+                            404
+                        ],
+                        "default": 400
+                    },
+                    "instance": {
+                        "readOnly": true,
+                        "description": "A URI reference that identifies the specific occurrence of the problem. It may or may not yield further information if dereferenced.",
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "type": {
+                        "readOnly": true,
+                        "description": "A URI reference that identifies the problem type",
+                        "type": "string"
+                    }
+                }
+            },
+            "Error.jsonld": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/HydraItemBaseSchema"
+                    },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "title": {
+                                "readOnly": true,
+                                "description": "A short, human-readable summary of the problem.",
+                                "type": [
+                                    "string",
+                                    "null"
+                                ]
+                            },
+                            "detail": {
+                                "readOnly": true,
+                                "description": "A human-readable explanation specific to this occurrence of the problem.",
+                                "type": [
+                                    "string",
+                                    "null"
+                                ]
+                            },
+                            "status": {
+                                "type": [
+                                    "integer",
+                                    "null"
+                                ],
+                                "examples": [
+                                    404
+                                ],
+                                "default": 400
+                            },
+                            "instance": {
+                                "readOnly": true,
+                                "description": "A URI reference that identifies the specific occurrence of the problem. It may or may not yield further information if dereferenced.",
+                                "type": [
+                                    "string",
+                                    "null"
+                                ]
+                            },
+                            "type": {
+                                "readOnly": true,
+                                "description": "A URI reference that identifies the problem type",
+                                "type": "string"
+                            },
+                            "description": {
+                                "readOnly": true,
+                                "type": [
+                                    "string",
+                                    "null"
+                                ]
+                            }
+                        }
+                    }
+                ],
+                "description": "A representation of common errors."
+            },
+            "HydraCollectionBaseSchema": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/HydraCollectionBaseSchemaNoPagination"
+                    },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "view": {
+                                "type": "object",
+                                "properties": {
+                                    "@id": {
+                                        "type": "string",
+                                        "format": "iri-reference"
+                                    },
+                                    "@type": {
+                                        "type": "string"
+                                    },
+                                    "first": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ],
+                                        "format": "iri-reference"
+                                    },
+                                    "last": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ],
+                                        "format": "iri-reference"
+                                    },
+                                    "previous": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ],
+                                        "format": "iri-reference"
+                                    },
+                                    "next": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ],
+                                        "format": "iri-reference"
+                                    }
+                                },
+                                "example": {
+                                    "@id": "string",
+                                    "@type": "string",
+                                    "first": "string",
+                                    "last": "string",
+                                    "previous": "string",
+                                    "next": "string"
+                                }
+                            }
+                        }
+                    }
+                ]
+            },
+            "HydraCollectionBaseSchemaNoPagination": {
+                "type": "object",
+                "properties": {
+                    "totalItems": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "search": {
+                        "type": "object",
+                        "properties": {
+                            "@type": {
+                                "type": "string"
+                            },
+                            "template": {
+                                "type": "string"
+                            },
+                            "variableRepresentation": {
+                                "type": "string"
+                            },
+                            "mapping": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "@type": {
+                                            "type": "string"
+                                        },
+                                        "variable": {
+                                            "type": "string"
+                                        },
+                                        "property": {
+                                            "type": [
+                                                "string",
+                                                "null"
+                                            ]
+                                        },
+                                        "required": {
+                                            "type": "boolean"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "HydraItemBaseSchema": {
+                "type": "object",
+                "properties": {
+                    "@context": {
+                        "oneOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "object",
+                                "properties": {
+                                    "@vocab": {
+                                        "type": "string"
+                                    },
+                                    "hydra": {
+                                        "type": "string",
+                                        "enum": [
+                                            "http://www.w3.org/ns/hydra/core#"
+                                        ]
+                                    }
+                                },
+                                "required": [
+                                    "@vocab",
+                                    "hydra"
+                                ],
+                                "additionalProperties": true
+                            }
+                        ]
+                    },
+                    "@id": {
+                        "type": "string"
+                    },
+                    "@type": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "@id",
+                    "@type"
+                ]
+            },
+            "Stamp.jsonld-stamp.read": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/HydraItemBaseSchema"
+                    },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "id": {
+                                "readOnly": true,
+                                "type": "integer"
+                            },
+                            "number": {
+                                "minimum": 0,
+                                "exclusiveMinimum": 0,
+                                "default": 0,
+                                "type": "integer"
+                            },
+                            "name": {
+                                "default": "",
+                                "type": "string"
+                            },
+                            "country": {
+                                "default": "CZ",
+                                "type": "string",
+                                "enum": [
+                                    "CZ",
+                                    "SK"
+                                ]
+                            },
+                            "type": {
+                                "default": "regular",
+                                "type": "string",
+                                "enum": [
+                                    "regular",
+                                    "annual"
+                                ]
+                            },
+                            "district": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ]
+                            },
+                            "region": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ]
+                            },
+                            "latitude": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ]
+                            },
+                            "longitude": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ]
+                            },
+                            "tags": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/StampTag.jsonld-stamp.read"
+                                }
+                            },
+                            "places": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/StampPlace.jsonld-stamp.read"
+                                }
+                            }
+                        },
+                        "required": [
+                            "name"
+                        ]
+                    }
+                ]
+            },
+            "StampPlace.jsonld-stamp.read": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/HydraItemBaseSchema"
+                    },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "id": {
+                                "readOnly": true,
+                                "type": "integer"
+                            },
+                            "name": {
+                                "default": "",
+                                "type": "string"
+                            },
+                            "url": {
+                                "description": "Empty string when the CSV line has no web URL (keeps the catalog key stable).",
+                                "default": "",
+                                "type": "string"
+                            },
+                            "latitude": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ]
+                            },
+                            "longitude": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ]
+                            }
+                        },
+                        "required": [
+                            "name"
+                        ]
+                    }
+                ]
+            },
+            "StampPlace.jsonld-stamp_place.read": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/HydraItemBaseSchema"
+                    },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "id": {
+                                "readOnly": true,
+                                "type": "integer"
+                            },
+                            "name": {
+                                "default": "",
+                                "type": "string"
+                            },
+                            "url": {
+                                "description": "Empty string when the CSV line has no web URL (keeps the catalog key stable).",
+                                "default": "",
+                                "type": "string"
+                            },
+                            "latitude": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ]
+                            },
+                            "longitude": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ]
+                            }
+                        },
+                        "required": [
+                            "name"
+                        ]
+                    }
+                ]
+            },
+            "StampTag.jsonld-stamp.read": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/HydraItemBaseSchema"
+                    },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "id": {
+                                "readOnly": true,
+                                "type": "integer"
+                            },
+                            "name": {
+                                "default": "",
+                                "type": "string"
+                            },
+                            "slug": {
+                                "default": "",
+                                "type": "string"
+                            }
+                        },
+                        "required": [
+                            "name",
+                            "slug"
+                        ]
+                    }
+                ]
+            },
+            "StampTag.jsonld-stamp_tag.read": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/HydraItemBaseSchema"
+                    },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "id": {
+                                "readOnly": true,
+                                "type": "integer"
+                            },
+                            "name": {
+                                "default": "",
+                                "type": "string"
+                            },
+                            "slug": {
+                                "default": "",
+                                "type": "string"
+                            }
+                        },
+                        "required": [
+                            "name",
+                            "slug"
+                        ]
+                    }
+                ]
+            },
+            "ValidationFailed": {
+                "type": "object",
+                "required": [
+                    "title",
+                    "detail",
+                    "violations"
+                ],
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "example": "Validation Failed"
+                    },
+                    "detail": {
+                        "type": "string",
+                        "example": "The given data failed validation."
+                    },
+                    "violations": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "required": [
+                                "propertyPath",
+                                "message"
+                            ],
+                            "properties": {
+                                "propertyPath": {
+                                    "type": "string",
+                                    "example": "email"
+                                },
+                                "message": {
+                                    "type": "string",
+                                    "example": "This value is not a valid email address."
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "responses": {},
+        "parameters": {},
+        "examples": {},
+        "requestBodies": {},
+        "headers": {},
+        "securitySchemes": {
+            "JWT": {
+                "type": "http",
+                "scheme": "bearer",
+                "bearerFormat": "JWT"
+            }
+        }
+    },
+    "security": [],
+    "tags": [
+        {
+            "name": "Stamp",
+            "description": "Resource 'Stamp' operations."
+        },
+        {
+            "name": "StampPlace",
+            "description": "Resource 'StampPlace' operations."
+        },
+        {
+            "name": "StampTag",
+            "description": "Resource 'StampTag' operations."
+        },
+        {
+            "name": "Authentication",
+            "description": "Register, verify, login, refresh, logout, and password reset"
+        }
+    ],
+    "webhooks": {}
+}

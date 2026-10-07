@@ -13,6 +13,7 @@ use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\MailerAssertionsTrait;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Mime\Email;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 
 final class AuthGraphQlTest extends WebTestCase
@@ -29,6 +30,31 @@ final class AuthGraphQlTest extends WebTestCase
         $this->client = static::createClient();
         $this->purgeDatabase();
         $this->clearRateLimiters();
+    }
+
+    public function testRegisterEmailUsesCzechLocale(): void
+    {
+        $register = $this->graphql(<<<'GRAPHQL'
+            mutation($email: String!, $locale: String) {
+              registerUser(input: { email: $email, locale: $locale }) {
+                user {
+                  email
+                }
+              }
+            }
+            GRAPHQL, variables: [
+                'email' => 'graphql-locale-cs@example.com',
+                'locale' => 'cs',
+            ]);
+
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $register);
+        self::assertEmailCount(1);
+
+        $email = self::getMailerMessage();
+        self::assertInstanceOf(Email::class, $email);
+        self::assertSame('Ověření e-mailu', $email->getSubject());
+        self::assertNotNull($this->extractTokenFromLastEmail());
     }
 
     public function testRegisterVerifyLoginMeAndLogout(): void

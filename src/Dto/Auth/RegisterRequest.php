@@ -12,6 +12,8 @@ final readonly class RegisterRequest
         #[Assert\NotBlank]
         #[Assert\Email]
         public string $email = '',
+        #[Assert\Choice(choices: ['en', 'cs'])]
+        public string $locale = 'en',
     ) {
     }
 }
