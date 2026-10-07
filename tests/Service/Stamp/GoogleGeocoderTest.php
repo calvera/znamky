@@ -48,6 +48,22 @@ final class GoogleGeocoderTest extends TestCase
         self::assertNull($geocoder->geocode('Nowhere-land'));
     }
 
+    public function testGeocodeOverQueryLimitThrows(): void
+    {
+        $client = new MockHttpClient([
+            new MockResponse(json_encode([
+                'status' => 'OVER_QUERY_LIMIT',
+                'error_message' => 'You have exceeded your daily request quota.',
+            ], \JSON_THROW_ON_ERROR)),
+        ]);
+
+        $geocoder = new GoogleGeocoder($client, 'test-key');
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('OVER_QUERY_LIMIT');
+        $geocoder->geocode('Praděd');
+    }
+
     public function testGeocodeRequestDeniedThrows(): void
     {
         $client = new MockHttpClient([

@@ -46,6 +46,30 @@ final class ScrapeWebStampsCommandTest extends TestCase
         self::assertSame(0, $requests);
     }
 
+    public function testRejectsNonIntegerTypeBeforeScraping(): void
+    {
+        $requests = 0;
+        $client = new MockHttpClient(function () use (&$requests): MockResponse {
+            ++$requests;
+
+            return new MockResponse('unused');
+        });
+
+        $tester = $this->tester($client, sys_get_temp_dir());
+
+        try {
+            $tester->execute([
+                '--type' => 'annual',
+                '--output' => 'tz-web',
+            ]);
+            self::fail('A non-integer --type must abort the command.');
+        } catch (\InvalidArgumentException $e) {
+            self::assertSame('--type must be an integer', $e->getMessage());
+        }
+
+        self::assertSame(0, $requests);
+    }
+
     public function testRelativeOutputFailureExitAndDiscoveryProgress(): void
     {
         $listHtml = file_get_contents(__DIR__.'/../fixtures/stamp_web/items_list.html');

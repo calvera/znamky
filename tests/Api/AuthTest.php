@@ -1063,6 +1063,171 @@ final class AuthTest extends WebTestCase
         self::assertNull($user->getEmailVerificationToken());
     }
 
+    public function testRefreshRejectsUnverifiedAccountWithoutConsumingTheToken(): void
+    {
+        $email = 'unverified-refresh@example.com';
+        $password = 'password123';
+        $this->registerAndVerify($email, $password);
+        $tokens = $this->login($email, $password);
+
+        $user = $this->findUser($email);
+        $user->setIsVerified(false);
+        $this->entityManager()->flush();
+
+        $this->jsonRequest('POST', '/api/token/refresh', [
+            'refresh_token' => $tokens['refresh_token'],
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+        $message = $this->jsonResponse()['message'] ?? null;
+        self::assertIsString($message);
+        self::assertStringContainsString('Please verify your email', $message);
+
+        $user = $this->findUser($email);
+        $user->setIsVerified(true);
+        $this->entityManager()->flush();
+
+        $this->jsonRequest('POST', '/api/token/refresh', [
+            'refresh_token' => $tokens['refresh_token'],
+        ]);
+        self::assertResponseIsSuccessful();
+        $rotated = $this->jsonResponse();
+        self::assertIsString($rotated['refresh_token'] ?? null);
+        self::assertNotSame($tokens['refresh_token'], $rotated['refresh_token']);
+    }
+
+    public function testRefreshDoesNotIssueAUsableTokenPastTheFamilyDeadline(): void
+    {
+        $email = 'family-deadline@example.com';
+        $this->registerAndVerify($email, 'password123');
+        $tokens = $this->login($email, 'password123');
+
+        $stored = $this->refreshTokenEntity($email);
+        $family = $stored->getFamily();
+        self::assertIsString($family);
+        self::assertNotSame('', $family);
+        $stored->setFamilyValid(new DateTime('-1 minute'));
+        $this->entityManager()->flush();
+
+        $this->jsonRequest('POST', '/api/token/refresh', [
+            'refresh_token' => $tokens['refresh_token'],
+        ]);
+        self::assertResponseIsSuccessful();
+        $rotated = $this->jsonResponse();
+        $newRefresh = $rotated['refresh_token'] ?? null;
+        self::assertIsString($newRefresh);
+        self::assertNotSame($tokens['refresh_token'], $newRefresh);
+
+        $capped = $this->refreshTokenEntity($email);
+        self::assertSame($family, $capped->getFamily());
+        $valid = $capped->getValid();
+        self::assertInstanceOf(\DateTimeInterface::class, $valid);
+        self::assertLessThan(time(), $valid->getTimestamp());
+
+        $this->jsonRequest('POST', '/api/token/refresh', [
+            'refresh_token' => $newRefresh,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+    }
+
+    public function testRefreshKeepsTheTtlWhenTheFamilyDeadlineIsLater(): void
+    {
+        $email = 'family-ttl@example.com';
+        $this->registerAndVerify($email, 'password123');
+        $tokens = $this->login($email, 'password123');
+
+        $stored = $this->refreshTokenEntity($email);
+        $originalValid = $stored->getValid();
+        self::assertInstanceOf(\DateTimeInterface::class, $originalValid);
+        $family = $stored->getFamily();
+        self::assertIsString($family);
+        $deadline = new DateTime();
+        $deadline->setTimestamp($originalValid->getTimestamp() + 30 * 86400);
+        $stored->setFamilyValid($deadline);
+        $this->entityManager()->flush();
+
+        $this->jsonRequest('POST', '/api/token/refresh', [
+            'refresh_token' => $tokens['refresh_token'],
+        ]);
+        self::assertResponseIsSuccessful();
+
+        $rotated = $this->refreshTokenEntity($email);
+        self::assertSame($family, $rotated->getFamily());
+        $valid = $rotated->getValid();
+        $familyValid = $rotated->getFamilyValid();
+        self::assertInstanceOf(\DateTimeInterface::class, $valid);
+        self::assertInstanceOf(\DateTimeInterface::class, $familyValid);
+        self::assertEqualsWithDelta($originalValid->getTimestamp(), $valid->getTimestamp(), 60);
+        self::assertEqualsWithDelta($deadline->getTimestamp(), $familyValid->getTimestamp(), 2);
+        self::assertLessThan($familyValid->getTimestamp() - 86400, $valid->getTimestamp());
+    }
+
+    public function testVerificationTokenWithoutExpiryDoesNotVerifyOrGetConsumed(): void
+    {
+        $email = 'null-expiry-verify@example.com';
+        $password = 'password123';
+        $this->jsonRequest('POST', '/api/register', [
+            'email' => $email,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
+        $token = $this->extractTokenFromLastEmail();
+
+        $user = $this->findUser($email);
+        $user->setEmailVerificationTokenExpiresAt(null);
+        $this->entityManager()->flush();
+
+        $this->jsonRequest('POST', '/api/verify-email', [
+            'token' => $token,
+            'password' => $password,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
+        self::assertFalse($this->findUser($email)->isVerified());
+
+        $user = $this->findUser($email);
+        $user->setEmailVerificationTokenExpiresAt(new DateTimeImmutable('+1 day'));
+        $this->entityManager()->flush();
+
+        $this->jsonRequest('POST', '/api/verify-email', [
+            'token' => $token,
+            'password' => $password,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+        $this->login($email, $password);
+    }
+
+    public function testPasswordResetTokenWithoutExpiryKeepsTheOldPassword(): void
+    {
+        $email = 'null-expiry-reset@example.com';
+        $oldPassword = 'password123';
+        $newPassword = 'newpassword456';
+        $this->registerAndVerify($email, $oldPassword);
+
+        $this->jsonRequest('POST', '/api/forgot-password', ['email' => $email]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+        $token = $this->extractTokenFromLastEmail();
+
+        $user = $this->findUser($email);
+        $user->setPasswordResetTokenExpiresAt(null);
+        $this->entityManager()->flush();
+
+        $this->jsonRequest('POST', '/api/reset-password', [
+            'token' => $token,
+            'password' => $newPassword,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
+        $this->login($email, $oldPassword);
+
+        $user = $this->findUser($email);
+        $user->setPasswordResetTokenExpiresAt(new DateTimeImmutable('+1 hour'));
+        $this->entityManager()->flush();
+
+        $this->jsonRequest('POST', '/api/reset-password', [
+            'token' => $token,
+            'password' => $newPassword,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+        $this->login($email, $newPassword);
+    }
+
     public function testLogoutWithEmptyRefreshTokenRevokesEverySession(): void
     {
         $email = 'logout-empty@example.com';
@@ -1195,6 +1360,25 @@ final class AuthTest extends WebTestCase
             'password' => $password,
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+    }
+
+    private function entityManager(): EntityManagerInterface
+    {
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        return $em;
+    }
+
+    private function refreshTokenEntity(string $email): RefreshToken
+    {
+        $this->entityManager()->clear();
+        $token = $this->entityManager()->getRepository(RefreshToken::class)->findOneBy([
+            'username' => strtolower($email),
+        ]);
+        self::assertInstanceOf(RefreshToken::class, $token);
+
+        return $token;
     }
 
     private function storedRefreshTokenFor(string $email): string

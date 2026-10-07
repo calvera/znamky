@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Tests\Api;
 
+use App\Entity\RefreshToken;
 use App\Entity\User;
 use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
+use Safe\DateTime;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\MailerAssertionsTrait;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
@@ -761,6 +763,135 @@ final class AuthGraphQlTest extends WebTestCase
         self::assertArrayNotHasKey('errors', $newLogin);
     }
 
+    public function testRefreshRejectsUnverifiedAccountWithoutConsumingTheToken(): void
+    {
+        $email = 'graphql-unverified-refresh@example.com';
+        $password = 'password123';
+        $tokens = $this->registerVerifyAndLogin($email, $password);
+
+        $user = $this->users()->findOneByEmail($email);
+        self::assertInstanceOf(User::class, $user);
+        $user->setIsVerified(false);
+        $this->entityManager()->flush();
+
+        $blocked = $this->refreshMutation($tokens['refreshToken']);
+        $this->assertGraphQlError($blocked, Response::HTTP_UNAUTHORIZED, 'Please verify your email before logging in.');
+
+        $user = $this->users()->findOneByEmail($email);
+        self::assertInstanceOf(User::class, $user);
+        $user->setIsVerified(true);
+        $this->entityManager()->flush();
+
+        $refresh = $this->refreshMutation($tokens['refreshToken']);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $refresh);
+        $rotated = $this->tokensFromRefresh($refresh);
+        self::assertNotSame($tokens['refreshToken'], $rotated['refreshToken']);
+    }
+
+    public function testRefreshDoesNotIssueAUsableTokenPastTheFamilyDeadline(): void
+    {
+        $email = 'graphql-family-deadline@example.com';
+        $tokens = $this->registerVerifyAndLogin($email, 'password123');
+
+        $stored = $this->refreshTokenEntity($email);
+        $family = $stored->getFamily();
+        self::assertIsString($family);
+        self::assertNotSame('', $family);
+        $stored->setFamilyValid(new DateTime('-1 minute'));
+        $this->entityManager()->flush();
+
+        $refresh = $this->refreshMutation($tokens['refreshToken']);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $refresh);
+        $rotated = $this->tokensFromRefresh($refresh);
+        self::assertNotSame($tokens['refreshToken'], $rotated['refreshToken']);
+
+        $capped = $this->refreshTokenEntity($email);
+        self::assertSame($family, $capped->getFamily());
+        $valid = $capped->getValid();
+        self::assertInstanceOf(\DateTimeInterface::class, $valid);
+        self::assertLessThan(time(), $valid->getTimestamp());
+
+        $again = $this->refreshMutation($rotated['refreshToken']);
+        $this->assertGraphQlError($again, Response::HTTP_UNAUTHORIZED, 'Invalid refresh token.');
+    }
+
+    public function testRefreshKeepsTheTtlWhenTheFamilyDeadlineIsLater(): void
+    {
+        $email = 'graphql-family-ttl@example.com';
+        $tokens = $this->registerVerifyAndLogin($email, 'password123');
+
+        $stored = $this->refreshTokenEntity($email);
+        $originalValid = $stored->getValid();
+        self::assertInstanceOf(\DateTimeInterface::class, $originalValid);
+        $family = $stored->getFamily();
+        self::assertIsString($family);
+        $deadline = new DateTime();
+        $deadline->setTimestamp($originalValid->getTimestamp() + 30 * 86400);
+        $stored->setFamilyValid($deadline);
+        $this->entityManager()->flush();
+
+        $refresh = $this->refreshMutation($tokens['refreshToken']);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $refresh);
+
+        $rotated = $this->refreshTokenEntity($email);
+        self::assertSame($family, $rotated->getFamily());
+        $valid = $rotated->getValid();
+        $familyValid = $rotated->getFamilyValid();
+        self::assertInstanceOf(\DateTimeInterface::class, $valid);
+        self::assertInstanceOf(\DateTimeInterface::class, $familyValid);
+        self::assertEqualsWithDelta($originalValid->getTimestamp(), $valid->getTimestamp(), 60);
+        self::assertEqualsWithDelta($deadline->getTimestamp(), $familyValid->getTimestamp(), 2);
+        self::assertLessThan($familyValid->getTimestamp() - 86400, $valid->getTimestamp());
+    }
+
+    public function testLogoutWithoutRefreshTokenRevokesEverySessionButNotOtherAccounts(): void
+    {
+        $owner = 'graphql-logout-all@example.com';
+        $password = 'password123';
+        $first = $this->registerVerifyAndLogin($owner, $password);
+        $second = $this->tokensFromLogin($this->loginMutation($owner, $password));
+        $other = $this->registerVerifyAndLogin('graphql-logout-other@example.com', $password);
+
+        $logout = $this->graphql(<<<'GRAPHQL'
+            mutation {
+              logoutUser(input: {}) {
+                user {
+                  success
+                }
+              }
+            }
+            GRAPHQL, $first['token']);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $logout);
+
+        $me = $this->graphql(<<<'GRAPHQL'
+            {
+              meUser {
+                email
+              }
+            }
+            GRAPHQL, $first['token']);
+        $this->assertGraphQlAccessDenied($me);
+
+        $this->assertGraphQlError(
+            $this->refreshMutation($first['refreshToken']),
+            Response::HTTP_UNAUTHORIZED,
+            'Invalid refresh token.',
+        );
+        $this->assertGraphQlError(
+            $this->refreshMutation($second['refreshToken']),
+            Response::HTTP_UNAUTHORIZED,
+            'Invalid refresh token.',
+        );
+
+        $otherRefresh = $this->refreshMutation($other['refreshToken']);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $otherRefresh);
+    }
+
     public function testRegisterRejectsAPasswordArgument(): void
     {
         $email = 'graphql-leftover@example.com';
@@ -871,6 +1002,63 @@ final class AuthGraphQlTest extends WebTestCase
         $login = $this->loginMutation($email, $verificationPassword);
         self::assertResponseIsSuccessful();
         self::assertArrayNotHasKey('errors', $login);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function refreshMutation(string $refreshToken): array
+    {
+        return $this->graphql(<<<'GRAPHQL'
+            mutation($refreshToken: String!) {
+              refreshTokenUser(input: { refreshToken: $refreshToken }) {
+                user {
+                  token
+                  refreshToken
+                }
+              }
+            }
+            GRAPHQL, variables: ['refreshToken' => $refreshToken]);
+    }
+
+    /**
+     * @param array<string, mixed> $refresh
+     *
+     * @return array{token: string, refreshToken: string}
+     */
+    private function tokensFromRefresh(array $refresh): array
+    {
+        self::assertArrayNotHasKey('errors', $refresh);
+
+        $data = $this->stringKeyedArray($refresh['data'] ?? null, 'refresh data');
+        $payload = $this->stringKeyedArray($data['refreshTokenUser'] ?? null, 'refreshTokenUser');
+        $tokens = $this->stringKeyedArray($payload['user'] ?? null, 'refreshTokenUser.user');
+        $token = $tokens['token'] ?? null;
+        $refreshToken = $tokens['refreshToken'] ?? null;
+        if (!\is_string($token) || !\is_string($refreshToken)) {
+            self::fail('Expected refreshTokenUser token and refreshToken strings.');
+        }
+
+        return ['token' => $token, 'refreshToken' => $refreshToken];
+    }
+
+    private function entityManager(): EntityManagerInterface
+    {
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        return $em;
+    }
+
+    private function refreshTokenEntity(string $email): RefreshToken
+    {
+        $this->entityManager()->clear();
+        $token = $this->entityManager()->getRepository(RefreshToken::class)->findOneBy([
+            'username' => strtolower($email),
+        ]);
+        self::assertInstanceOf(RefreshToken::class, $token);
+
+        return $token;
     }
 
     private function users(): UserRepository
