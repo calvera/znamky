@@ -96,7 +96,7 @@ final class PlaceLineParser
             return $value;
         }
 
-        /** @infection-ignore-all */
+        /* @infection-ignore-all */
         if (str_starts_with(strtolower($value), 'www.')) {
             return 'https://'.$value;
         }
