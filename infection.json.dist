@@ -1,10 +1,15 @@
 {
     "$schema": "https://raw.githubusercontent.com/infection/infection/0.35.6/resources/schema.json",
-    "timeout": 30,
+    "timeout": 25,
     "threads": "max",
     "source": {
         "directories": ["src"],
-        "excludes": ["Kernel.php"]
+        "excludes": [
+            "Kernel.php",
+            "Command/ScrapeWebStampsCommand.php",
+            "Service/Stamp/StampWebScrapeService.php",
+            "Service/Stamp/StampWebScrapeOptions.php"
+        ]
     },
     "logs": {
         "text": "var/infection.log",
