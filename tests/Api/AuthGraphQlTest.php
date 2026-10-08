@@ -54,7 +54,124 @@ final class AuthGraphQlTest extends WebTestCase
         $email = self::getMailerMessage();
         self::assertInstanceOf(Email::class, $email);
         self::assertSame('Ověření e-mailu', $email->getSubject());
-        $this->extractTokenFromLastEmail();
+        $html = $email->getHtmlBody();
+        self::assertIsString($html);
+        self::assertStringContainsString('lang="cs"', $html);
+        self::assertStringContainsString($this->extractTokenFromLastEmail(), $html);
+    }
+
+    public function testRegisterInvalidLocaleDoesNotCreateTheAccount(): void
+    {
+        $email = 'graphql-locale-bad@example.com';
+        $rejected = $this->graphql(<<<'GRAPHQL'
+            mutation($email: String!, $locale: String) {
+              registerUser(input: { email: $email, locale: $locale }) {
+                user {
+                  email
+                }
+              }
+            }
+            GRAPHQL, variables: [
+            'email' => $email,
+            'locale' => 'de',
+        ]);
+
+        self::assertResponseIsSuccessful();
+        self::assertArrayHasKey('errors', $rejected);
+        self::assertEmailCount(0);
+        self::assertNull($this->users()->findOneByEmail($email));
+    }
+
+    public function testForgotPasswordEmailUsesCzechLocale(): void
+    {
+        $emailAddress = 'graphql-reset-locale-cs@example.com';
+        $this->registerVerifyAndLogin($emailAddress, 'password123');
+
+        $forgot = $this->graphql(<<<'GRAPHQL'
+            mutation($email: String!, $locale: String) {
+              forgotPasswordUser(input: { email: $email, locale: $locale }) {
+                user {
+                  success
+                }
+              }
+            }
+            GRAPHQL, variables: [
+            'email' => $emailAddress,
+            'locale' => 'cs',
+        ]);
+
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $forgot);
+        self::assertEmailCount(1);
+
+        $email = self::getMailerMessage();
+        self::assertInstanceOf(Email::class, $email);
+        self::assertSame('Obnovení hesla', $email->getSubject());
+        $html = $email->getHtmlBody();
+        self::assertIsString($html);
+        self::assertStringContainsString('lang="cs"', $html);
+        self::assertStringContainsString('Kód pro obnovení', $html);
+        $text = $email->getTextBody();
+        self::assertIsString($text);
+        self::assertStringContainsString('Tento kód vyprší za 1 hodinu.', $text);
+        self::assertStringContainsString($this->extractTokenFromLastEmail(), $text);
+    }
+
+    public function testForgotPasswordInvalidLocaleDoesNotReplaceTheResetToken(): void
+    {
+        $email = 'graphql-reset-locale-bad@example.com';
+        $this->registerVerifyAndLogin($email, 'password123');
+
+        $forgot = $this->graphql(<<<'GRAPHQL'
+            mutation($email: String!) {
+              forgotPasswordUser(input: { email: $email }) {
+                user {
+                  success
+                }
+              }
+            }
+            GRAPHQL, variables: ['email' => $email]);
+
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $forgot);
+        $token = $this->extractTokenFromLastEmail();
+
+        $rejected = $this->graphql(<<<'GRAPHQL'
+            mutation($email: String!, $locale: String) {
+              forgotPasswordUser(input: { email: $email, locale: $locale }) {
+                user {
+                  success
+                }
+              }
+            }
+            GRAPHQL, variables: [
+            'email' => $email,
+            'locale' => 'de',
+        ]);
+
+        self::assertResponseIsSuccessful();
+        self::assertArrayHasKey('errors', $rejected);
+        self::assertEmailCount(0);
+
+        $reset = $this->graphql(<<<'GRAPHQL'
+            mutation($token: String!, $password: String!) {
+              resetPasswordUser(input: { token: $token, password: $password }) {
+                user {
+                  success
+                }
+              }
+            }
+            GRAPHQL, variables: [
+            'token' => $token,
+            'password' => 'newpassword456',
+        ]);
+
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $reset);
+
+        $login = $this->loginMutation($email, 'newpassword456');
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $login);
     }
 
     public function testRegisterVerifyLoginMeAndLogout(): void
