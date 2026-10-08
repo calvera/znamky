@@ -30,3 +30,9 @@
 ###> phpstan/phpstan ###
 /phpstan.neon
 ###< phpstan/phpstan ###
+
+###> infection/infection ###
+/infection.json5
+/infection.json
+/infection.log
+###< infection/infection ###

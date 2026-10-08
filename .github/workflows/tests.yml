@@ -182,3 +182,79 @@ jobs:
           fail_ci_if_error: true
           flags: unittests
           name: phpunit
+
+  infection:
+    name: Infection
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: app
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: "!ChangeMe!"
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -d app -U app"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      APP_ENV: test
+      DATABASE_URL: "postgresql://app:!ChangeMe!@127.0.0.1:5432/app?serverVersion=16&charset=utf8"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: intl, pdo_pgsql
+          coverage: pcov
+          ini-values: memory_limit=512M, pcov.directory=src
+          tools: composer:v2
+
+      - name: Get Composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Composer packages
+        uses: actions/cache@v6
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('composer.lock') }}
+          restore-keys: ${{ runner.os }}-composer-
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Prepare test database
+        run: |
+          php bin/console lexik:jwt:generate-keypair --skip-if-exists
+          php bin/console doctrine:database:create --if-not-exists
+          php bin/console doctrine:migrations:migrate --no-interaction
+
+      - name: Fetch diff base
+        id: infection-base
+        run: |
+          BASE_REF="${{ github.base_ref || github.event.repository.default_branch }}"
+          git fetch --depth=1 origin "$BASE_REF"
+          echo "ref=origin/$BASE_REF" >> "$GITHUB_OUTPUT"
+
+      - name: Run Infection on changed lines
+        run: |
+          vendor/bin/infection \
+            --threads=max \
+            --git-diff-lines \
+            --git-diff-base=${{ steps.infection-base.outputs.ref }} \
+            --ignore-msi-with-no-mutations \
+            --min-covered-msi=70 \
+            --logger-github \
+            --no-progress

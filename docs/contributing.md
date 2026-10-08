@@ -14,17 +14,23 @@ Individual commands:
 composer cs-check
 composer phpstan   # needs a warmed container: php bin/console cache:warmup
 composer test
+composer infection # mutation testing (needs Postgres + JWT keys like PHPUnit)
 ```
+
+Infection is not part of `composer quality` (too slow for the everyday gate). Locally it mutates all of `src/` (except `Kernel.php`). Config lives in `infection.json.dist`; override locally with an untracked `infection.json` / `infection.json5` if needed.
 
 ## CI
 
-On every push and pull request, GitHub Actions runs three jobs:
+On every push and pull request, GitHub Actions runs four jobs:
 
 | Check | What it runs |
 |-------|----------------|
 | CS Fixer | `composer cs-check` |
 | PHPStan | cache warmup + `composer phpstan` |
 | PHPUnit | tests with coverage |
+| Infection | mutation testing on changed lines only (`--git-diff-lines`) |
+
+Infection fails the build when covered MSI on mutated lines is below **70%**. Diffs that touch no mutable `src/` lines pass (`ignoreMsiWithNoMutations`).
 
 Coverage is uploaded to Codecov. PRs get a coverage comment. The Codecov check fails when:
 
@@ -57,6 +63,6 @@ The Release workflow then:
 
 In Settings → Branches → rules for the default branch, require:
 
-- Status checks: **CS Fixer**, **PHPStan**, **PHPUnit**, and the **Codecov** check
+- Status checks: **CS Fixer**, **PHPStan**, **PHPUnit**, **Infection**, and the **Codecov** check
 - Do not allow force pushes
 - Prefer requiring a pull request before merging
