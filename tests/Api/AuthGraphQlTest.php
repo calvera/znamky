@@ -1019,6 +1019,25 @@ final class AuthGraphQlTest extends WebTestCase
             GRAPHQL, $first['token']);
         $this->assertGraphQlAccessDenied($me);
 
+        $otherSession = $this->graphql(<<<'GRAPHQL'
+            {
+              meUser {
+                email
+              }
+            }
+            GRAPHQL, $second['token']);
+        $this->assertGraphQlAccessDenied($otherSession);
+
+        $otherAccount = $this->graphql(<<<'GRAPHQL'
+            {
+              meUser {
+                email
+              }
+            }
+            GRAPHQL, $other['token']);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $otherAccount);
+
         $this->assertGraphQlError(
             $this->refreshMutation($first['refreshToken']),
             Response::HTTP_UNAUTHORIZED,

@@ -11,5 +11,10 @@ gesdinet_jwt_refresh_token:
     reuse_detection:
         enabled: true
         # cache.app must be shared across replicas for replay detection to work in a fleet.
+    # revokeAllForUser() (password reset, logout of every session) otherwise leaves
+    # already issued JWTs valid until token_ttl. The mark only has to outlive those JWTs.
+    block_jwts_on_revocation:
+        enabled: true
+        ttl: 3600
     api_platform:
         enabled: true
