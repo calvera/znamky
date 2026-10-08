@@ -13,7 +13,7 @@ verification, and password reset.
 
 - PHP 8.4+
 - Composer
-- PostgreSQL 16 (Docker Compose included)
+- PostgreSQL 18 (Docker Compose included)
 - Symfony CLI (optional)
 
 ## Quick start
@@ -103,7 +103,7 @@ php bin/phpunit
 ```
 
 GitHub Actions (`.github/workflows/tests.yml`) runs this suite on every push and
-pull request against PostgreSQL 16. The job prints PHPUnit's coverage report in
+pull request against PostgreSQL 18. The job prints PHPUnit's coverage report in
 the logs and uploads Clover and Cobertura reports as artifacts.
 
 ## Production Docker
