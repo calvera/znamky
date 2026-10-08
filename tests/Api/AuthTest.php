@@ -164,8 +164,15 @@ final class AuthTest extends WebTestCase
         self::assertSame('Verify your email', $email->getSubject());
         $html = $email->getHtmlBody();
         self::assertIsString($html);
+        self::assertStringContainsString('lang="en"', $html);
         self::assertStringContainsString('Verification code', $html);
-        self::assertStringContainsString($this->extractTokenFromLastEmail(), $html);
+        $token = $this->extractTokenFromLastEmail();
+        self::assertStringContainsString($token, $html);
+        $text = $email->getTextBody();
+        self::assertIsString($text);
+        self::assertStringContainsString('Verification code', $text);
+        self::assertStringContainsString('This code expires in 24 hours.', $text);
+        self::assertStringContainsString($token, $text);
     }
 
     public function testRegisterEmailUsesCzechLocale(): void
@@ -182,8 +189,15 @@ final class AuthTest extends WebTestCase
         self::assertSame('Ověření e-mailu', $email->getSubject());
         $html = $email->getHtmlBody();
         self::assertIsString($html);
+        self::assertStringContainsString('lang="cs"', $html);
         self::assertStringContainsString('Ověřovací kód', $html);
-        self::assertStringContainsString($this->extractTokenFromLastEmail(), $html);
+        $token = $this->extractTokenFromLastEmail();
+        self::assertStringContainsString($token, $html);
+        $text = $email->getTextBody();
+        self::assertIsString($text);
+        self::assertStringContainsString('Ověřovací kód', $text);
+        self::assertStringContainsString('Tento kód vyprší za 24 hodin.', $text);
+        self::assertStringContainsString($token, $text);
     }
 
     public function testRegisterInvalidLocaleReturns422(): void
@@ -212,8 +226,114 @@ final class AuthTest extends WebTestCase
         self::assertSame('Obnovení hesla', $email->getSubject());
         $html = $email->getHtmlBody();
         self::assertIsString($html);
+        self::assertStringContainsString('lang="cs"', $html);
         self::assertStringContainsString('Kód pro obnovení', $html);
-        self::assertStringContainsString($this->extractTokenFromLastEmail(), $html);
+        $token = $this->extractTokenFromLastEmail();
+        self::assertStringContainsString($token, $html);
+        $text = $email->getTextBody();
+        self::assertIsString($text);
+        self::assertStringContainsString('Kód pro obnovení', $text);
+        self::assertStringContainsString('Tento kód vyprší za 1 hodinu.', $text);
+        self::assertStringContainsString($token, $text);
+    }
+
+    public function testForgotPasswordEmailDefaultsToEnglish(): void
+    {
+        $emailAddress = 'reset-locale-en@example.com';
+        $this->registerAndVerify($emailAddress, 'password123');
+
+        $this->jsonRequest('POST', '/api/forgot-password', [
+            'email' => $emailAddress,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+
+        $email = self::getMailerMessage();
+        self::assertInstanceOf(Email::class, $email);
+        self::assertSame('Reset your password', $email->getSubject());
+        $html = $email->getHtmlBody();
+        self::assertIsString($html);
+        self::assertStringContainsString('lang="en"', $html);
+        self::assertStringContainsString('Reset code', $html);
+        $token = $this->extractTokenFromLastEmail();
+        self::assertStringContainsString($token, $html);
+        $text = $email->getTextBody();
+        self::assertIsString($text);
+        self::assertStringContainsString('Reset code', $text);
+        self::assertStringContainsString('This code expires in 1 hour.', $text);
+        self::assertStringContainsString($token, $text);
+    }
+
+    public function testReregisteringUnverifiedAccountSendsTheRequestedLocale(): void
+    {
+        $emailAddress = 'reissue-locale-cs@example.com';
+
+        $this->jsonRequest('POST', '/api/register', [
+            'email' => $emailAddress,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
+        $first = self::getMailerMessage();
+        self::assertInstanceOf(Email::class, $first);
+        self::assertSame('Verify your email', $first->getSubject());
+        $oldToken = $this->extractTokenFromLastEmail();
+
+        $this->jsonRequest('POST', '/api/register', [
+            'email' => $emailAddress,
+            'locale' => 'cs',
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
+        self::assertEmailCount(1);
+
+        $email = self::getMailerMessage();
+        self::assertInstanceOf(Email::class, $email);
+        self::assertSame('Ověření e-mailu', $email->getSubject());
+        $html = $email->getHtmlBody();
+        self::assertIsString($html);
+        self::assertStringContainsString('lang="cs"', $html);
+        $newToken = $this->extractTokenFromLastEmail();
+        self::assertNotSame($oldToken, $newToken);
+        self::assertStringContainsString($newToken, $html);
+        $text = $email->getTextBody();
+        self::assertIsString($text);
+        self::assertStringContainsString($newToken, $text);
+
+        $this->jsonRequest('POST', '/api/verify-email', [
+            'token' => $oldToken,
+            'password' => 'password123',
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
+
+        $this->jsonRequest('POST', '/api/verify-email', [
+            'token' => $newToken,
+            'password' => 'password123',
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+        $this->login($emailAddress, 'password123');
+    }
+
+    public function testForgotPasswordInvalidLocaleDoesNotReplaceTheResetToken(): void
+    {
+        $emailAddress = 'reset-locale-keep@example.com';
+        $this->registerAndVerify($emailAddress, 'password123');
+
+        $this->jsonRequest('POST', '/api/forgot-password', [
+            'email' => $emailAddress,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+        $token = $this->extractTokenFromLastEmail();
+
+        $this->jsonRequest('POST', '/api/forgot-password', [
+            'email' => $emailAddress,
+            'locale' => 'de',
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
+        self::assertEmailCount(0);
+
+        $this->jsonRequest('POST', '/api/reset-password', [
+            'token' => $token,
+            'password' => 'newpassword456',
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+        $this->login($emailAddress, 'newpassword456');
     }
 
     public function testForgotPasswordInvalidLocaleReturns422(): void
