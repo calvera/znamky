@@ -68,6 +68,18 @@ final class PlaceLineParserTest extends TestCase
         self::assertSame('Hotel Figura', $places[2]['name']);
     }
 
+    public function testParseCellSkipsBlankLinesBetweenPlaces(): void
+    {
+        $cell = "Chata Ovčárna (http://www.ovcarna.cz)\n\nHotel Figura (https://www.figura.cz/)";
+
+        $places = $this->parser->parseCell($cell);
+
+        self::assertSame([
+            ['name' => 'Chata Ovčárna', 'url' => 'http://www.ovcarna.cz'],
+            ['name' => 'Hotel Figura', 'url' => 'https://www.figura.cz/'],
+        ], $places);
+    }
+
     public function testParseTags(): void
     {
         $tags = $this->parser->parseTags('Rozhledny a vyhlídky, CHKO a rezervace, Pohoří, Jeseníky');
