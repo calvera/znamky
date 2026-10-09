@@ -197,7 +197,7 @@ final class AuthOpenApiFactory implements OpenApiFactoryInterface
                 (string) HttpResponse::HTTP_TOO_MANY_REQUESTS => $this->tooManyRequestsResponse(),
             ],
             summary: 'Reset password with email token',
-            description: 'Sets a new password using the raw token from the reset email. Revokes all refresh tokens for the user. Does not verify the email; an unverified account must still confirm the original verification token. Rate limited per client IP.',
+            description: 'Sets a new password using the raw token from the reset email. Revokes all refresh tokens for the user and rejects JWTs issued before the reset. Does not verify the email; an unverified account must still confirm the original verification token. Rate limited per client IP.',
             requestBody: new RequestBody(
                 description: 'Reset token and new password',
                 content: new \ArrayObject([
@@ -226,7 +226,7 @@ final class AuthOpenApiFactory implements OpenApiFactoryInterface
                 (string) HttpResponse::HTTP_UNAUTHORIZED => new Response(description: 'Missing or invalid JWT'),
             ],
             summary: 'Logout',
-            description: 'Blocklists the current JWT. If `refresh_token` is sent, that refresh token is revoked; otherwise all refresh tokens for the user are revoked.',
+            description: 'Blocklists the current JWT. If `refresh_token` is sent, that refresh token is revoked; otherwise all refresh tokens for the user are revoked and JWTs issued before the logout are rejected.',
             requestBody: new RequestBody(
                 description: 'Optional refresh token to revoke (omit to revoke all for the user)',
                 content: new \ArrayObject([

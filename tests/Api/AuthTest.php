@@ -937,6 +937,11 @@ final class AuthTest extends WebTestCase
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
 
+        $this->client->request('GET', '/api/me', server: [
+            'HTTP_AUTHORIZATION' => 'Bearer '.$second['token'],
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+
         $this->jsonRequest('POST', '/api/token/refresh', [
             'refresh_token' => $first['refresh_token'],
         ]);
@@ -1172,6 +1177,21 @@ final class AuthTest extends WebTestCase
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
 
+        $this->client->request('GET', '/api/me', server: [
+            'HTTP_AUTHORIZATION' => 'Bearer '.$first['token'],
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+
+        $this->client->request('GET', '/api/me', server: [
+            'HTTP_AUTHORIZATION' => 'Bearer '.$second['token'],
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+
+        $this->client->request('GET', '/api/me', server: [
+            'HTTP_AUTHORIZATION' => 'Bearer '.$bystander['token'],
+        ]);
+        self::assertResponseIsSuccessful();
+
         $this->jsonRequest('POST', '/api/token/refresh', [
             'refresh_token' => $first['refresh_token'],
         ]);
@@ -1187,7 +1207,14 @@ final class AuthTest extends WebTestCase
         ]);
         self::assertResponseIsSuccessful();
 
-        $this->login($email, 'newpassword456');
+        // Revocation marks compare iat at second resolution and also refuse a token
+        // issued in the same second, so wait out that second before logging in again.
+        $this->waitForNextSecond();
+        $fresh = $this->login($email, 'newpassword456');
+        $this->client->request('GET', '/api/me', server: [
+            'HTTP_AUTHORIZATION' => 'Bearer '.$fresh['token'],
+        ]);
+        self::assertResponseIsSuccessful();
     }
 
     public function testShortVerificationPasswordDoesNotConsumeTheToken(): void
@@ -1613,6 +1640,14 @@ final class AuthTest extends WebTestCase
         }
 
         $em->flush();
+    }
+
+    private function waitForNextSecond(): void
+    {
+        $start = time();
+        while (time() === $start) {
+            usleep(50_000);
+        }
     }
 
     private function purgeDatabase(): void

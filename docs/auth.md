@@ -154,10 +154,12 @@ Content-Type: application/json
 {"token":"<token-from-email>","password":"newpassword123"}
 ```
 
-**204** on success. All refresh tokens for the user are revoked. Reset does not
-verify the email; an unverified account still has to `POST /api/verify-email`
-with the original verification token and the password chosen at verification
-(verify overwrites any password set by reset).
+**204** on success. All refresh tokens for the user are revoked, and JWTs issued
+before the reset are rejected until they would have expired (`token_ttl`, 1 hour).
+A JWT issued in that same second is refused too (`iat` only has second resolution);
+sign in again on the next second. Reset does not verify the email; an unverified
+account still has to `POST /api/verify-email` with the original verification token
+and the password chosen at verification (verify overwrites any password set by reset).
 
 ## Logout
 
@@ -172,7 +174,8 @@ Content-Type: application/json
 **204**. The access token is blocklisted.
 
 - If `refresh_token` is provided, that refresh token is revoked.
-- If it is omitted (or `null`), **all** refresh tokens for the user are revoked.
+- If it is omitted (or `null`), **all** refresh tokens for the user are revoked,
+  and every JWT issued before that logout is rejected for the rest of its `token_ttl`.
 
 ## Validation & errors
 
