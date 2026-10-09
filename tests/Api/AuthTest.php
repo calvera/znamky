@@ -453,6 +453,43 @@ final class AuthTest extends WebTestCase
         self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
     }
 
+    public function testRefreshReuseDoesNotRevokeAnotherSessionsAccessToken(): void
+    {
+        $email = 'reuse-other-session@example.com';
+        $password = 'password123';
+        $this->registerAndVerify($email, $password);
+        $replayed = $this->login($email, $password);
+        $other = $this->login($email, $password);
+
+        $this->jsonRequest('POST', '/api/token/refresh', [
+            'refresh_token' => $replayed['refresh_token'],
+        ]);
+        self::assertResponseIsSuccessful();
+        $rotated = $this->jsonResponse();
+        $rotatedRefresh = $rotated['refresh_token'] ?? null;
+        self::assertIsString($rotatedRefresh);
+
+        $this->jsonRequest('POST', '/api/token/refresh', [
+            'refresh_token' => $replayed['refresh_token'],
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+
+        $this->jsonRequest('POST', '/api/token/refresh', [
+            'refresh_token' => $rotatedRefresh,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+
+        $this->client->request('GET', '/api/me', server: [
+            'HTTP_AUTHORIZATION' => 'Bearer '.$other['token'],
+        ]);
+        self::assertResponseIsSuccessful();
+
+        $this->jsonRequest('POST', '/api/token/refresh', [
+            'refresh_token' => $other['refresh_token'],
+        ]);
+        self::assertResponseIsSuccessful();
+    }
+
     public function testStoredRefreshTokenDigestCannotBeUsedToRefresh(): void
     {
         $email = 'digest-refresh@example.com';
@@ -532,6 +569,41 @@ final class AuthTest extends WebTestCase
             'refresh_token' => $tokens['refresh_token'],
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+    }
+
+    public function testLogoutOfOneSessionLeavesTheOtherAccessTokenValid(): void
+    {
+        $email = 'logout-one@example.com';
+        $password = 'password123';
+        $this->registerAndVerify($email, $password);
+        $first = $this->login($email, $password);
+        $second = $this->login($email, $password);
+
+        $this->client->request(
+            'POST',
+            '/api/logout',
+            server: [
+                'HTTP_AUTHORIZATION' => 'Bearer '.$first['token'],
+                'CONTENT_TYPE' => 'application/json',
+            ],
+            content: json_encode(['refresh_token' => $first['refresh_token']], \JSON_THROW_ON_ERROR),
+        );
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+
+        $this->client->request('GET', '/api/me', server: [
+            'HTTP_AUTHORIZATION' => 'Bearer '.$first['token'],
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+
+        $this->client->request('GET', '/api/me', server: [
+            'HTTP_AUTHORIZATION' => 'Bearer '.$second['token'],
+        ]);
+        self::assertResponseIsSuccessful();
+
+        $this->jsonRequest('POST', '/api/token/refresh', [
+            'refresh_token' => $second['refresh_token'],
+        ]);
+        self::assertResponseIsSuccessful();
     }
 
     public function testStaleBearerDoesNotBlockPublicRegister(): void
@@ -911,6 +983,35 @@ final class AuthTest extends WebTestCase
         self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
 
         $this->login($email, $oldPassword);
+    }
+
+    public function testExpiredPasswordResetDoesNotRevokeOutstandingAccessTokens(): void
+    {
+        $email = 'expired-reset-session@example.com';
+        $password = 'password123';
+        $this->registerAndVerify($email, $password);
+        $tokens = $this->login($email, $password);
+
+        $this->jsonRequest('POST', '/api/forgot-password', ['email' => $email]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+        $token = $this->extractTokenFromLastEmail();
+        $this->expireUserToken($email, 'passwordResetTokenExpiresAt');
+
+        $this->jsonRequest('POST', '/api/reset-password', [
+            'token' => $token,
+            'password' => 'newpassword456',
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
+
+        $this->client->request('GET', '/api/me', server: [
+            'HTTP_AUTHORIZATION' => 'Bearer '.$tokens['token'],
+        ]);
+        self::assertResponseIsSuccessful();
+
+        $this->jsonRequest('POST', '/api/token/refresh', [
+            'refresh_token' => $tokens['refresh_token'],
+        ]);
+        self::assertResponseIsSuccessful();
     }
 
     public function testLogoutWithoutRefreshTokenRevokesEverySession(): void
