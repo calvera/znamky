@@ -409,6 +409,119 @@ final class StampWebScrapeServiceTest extends TestCase
         self::assertSame(1, $stats['failed']);
     }
 
+    public function testServiceUnavailableUsesTheRateLimitBudgetNotTransientRetries(): void
+    {
+        $listHtml = file_get_contents(__DIR__.'/../../fixtures/stamp_web/items_list.html');
+        $detailHtml = file_get_contents(__DIR__.'/../../fixtures/stamp_web/item_detail.html');
+        $lazyJson = file_get_contents(__DIR__.'/../../fixtures/stamp_web/lazy_page1.json');
+        $detailAttempts = 0;
+
+        $client = new MockHttpClient(function (string $method, string $url) use ($listHtml, $detailHtml, $lazyJson, &$detailAttempts): MockResponse {
+            if (str_contains($url, '/items/lazy')) {
+                return new MockResponse($lazyJson, ['response_headers' => ['content-type' => 'application/json']]);
+            }
+            if (str_contains($url, '/items/3535')) {
+                ++$detailAttempts;
+                if ($detailAttempts < 2) {
+                    return new MockResponse('unavailable', ['http_code' => 503]);
+                }
+
+                return new MockResponse($detailHtml, ['response_headers' => ['content-type' => 'text/html']]);
+            }
+            if (str_contains($url, '/items?') || str_ends_with($url, '/items')) {
+                return new MockResponse($listHtml, ['response_headers' => ['content-type' => 'text/html']]);
+            }
+
+            self::fail('Unexpected URL: '.$url);
+        });
+
+        $outputDir = sys_get_temp_dir().'/znamky-scrape-'.bin2hex(random_bytes(4));
+        $stats = (new StampWebScrapeService($client))->scrape($this->quietOptions(
+            $outputDir,
+            retries: 0,
+            rateLimitRetries: 1,
+            skipImages: true,
+        ));
+
+        self::assertSame(2, $detailAttempts);
+        self::assertSame(1, $stats['scraped']);
+        self::assertSame(0, $stats['failed']);
+    }
+
+    public function testServiceUnavailableDoesNotUseTheTransientRetryBudget(): void
+    {
+        $listHtml = file_get_contents(__DIR__.'/../../fixtures/stamp_web/items_list.html');
+        $lazyJson = file_get_contents(__DIR__.'/../../fixtures/stamp_web/lazy_page1.json');
+        $detailAttempts = 0;
+
+        $client = new MockHttpClient(function (string $method, string $url) use ($listHtml, $lazyJson, &$detailAttempts): MockResponse {
+            if (str_contains($url, '/items/lazy')) {
+                return new MockResponse($lazyJson, ['response_headers' => ['content-type' => 'application/json']]);
+            }
+            if (str_contains($url, '/items/3535')) {
+                ++$detailAttempts;
+
+                return new MockResponse('unavailable', ['http_code' => 503]);
+            }
+            if (str_contains($url, '/items?') || str_ends_with($url, '/items')) {
+                return new MockResponse($listHtml, ['response_headers' => ['content-type' => 'text/html']]);
+            }
+
+            self::fail('Unexpected URL: '.$url);
+        });
+
+        $outputDir = sys_get_temp_dir().'/znamky-scrape-'.bin2hex(random_bytes(4));
+        $stats = (new StampWebScrapeService($client))->scrape($this->quietOptions(
+            $outputDir,
+            retries: 3,
+            rateLimitRetries: 0,
+            skipImages: true,
+        ));
+
+        self::assertSame(1, $detailAttempts);
+        self::assertSame(0, $stats['scraped']);
+        self::assertSame(1, $stats['failed']);
+    }
+
+    public function testTransportErrorsAreRetriedThenSucceed(): void
+    {
+        $listHtml = file_get_contents(__DIR__.'/../../fixtures/stamp_web/items_list.html');
+        $detailHtml = file_get_contents(__DIR__.'/../../fixtures/stamp_web/item_detail.html');
+        $lazyJson = file_get_contents(__DIR__.'/../../fixtures/stamp_web/lazy_page1.json');
+        $detailAttempts = 0;
+
+        $client = new MockHttpClient(function (string $method, string $url) use ($listHtml, $detailHtml, $lazyJson, &$detailAttempts): MockResponse {
+            if (str_contains($url, '/items/lazy')) {
+                return new MockResponse($lazyJson, ['response_headers' => ['content-type' => 'application/json']]);
+            }
+            if (str_contains($url, '/items/3535')) {
+                ++$detailAttempts;
+                if ($detailAttempts < 2) {
+                    return new MockResponse('', ['error' => 'idle timeout']);
+                }
+
+                return new MockResponse($detailHtml, ['response_headers' => ['content-type' => 'text/html']]);
+            }
+            if (str_contains($url, '/items?') || str_ends_with($url, '/items')) {
+                return new MockResponse($listHtml, ['response_headers' => ['content-type' => 'text/html']]);
+            }
+
+            self::fail('Unexpected URL: '.$url);
+        });
+
+        $outputDir = sys_get_temp_dir().'/znamky-scrape-'.bin2hex(random_bytes(4));
+        $stats = (new StampWebScrapeService($client))->scrape($this->quietOptions(
+            $outputDir,
+            retries: 1,
+            skipImages: true,
+        ));
+
+        self::assertSame(2, $detailAttempts);
+        self::assertSame(1, $stats['scraped']);
+        self::assertSame(0, $stats['failed']);
+        self::assertFileExists($outputDir.'/stamps/3535/stamp.json');
+    }
+
     public function testUnsafeImageNamesAreSkippedAndNullBytesStripped(): void
     {
         $listHtml = file_get_contents(__DIR__.'/../../fixtures/stamp_web/items_list.html');

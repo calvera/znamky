@@ -906,6 +906,56 @@ final class AuthGraphQlTest extends WebTestCase
         self::assertArrayNotHasKey('errors', $newLogin);
     }
 
+    public function testShortVerificationPasswordDoesNotConsumeTheToken(): void
+    {
+        $email = 'graphql-short-verify@example.com';
+        $password = 'password123';
+
+        $this->graphql(<<<'GRAPHQL'
+            mutation($email: String!) {
+              registerUser(input: { email: $email }) {
+                user {
+                  email
+                }
+              }
+            }
+            GRAPHQL, variables: ['email' => $email]);
+        self::assertResponseIsSuccessful();
+        $token = $this->extractTokenFromLastEmail();
+
+        $tooShort = $this->graphql(<<<'GRAPHQL'
+            mutation($token: String!, $password: String!) {
+              verifyEmailUser(input: { token: $token, password: $password }) {
+                user {
+                  success
+                }
+              }
+            }
+            GRAPHQL, variables: ['token' => $token, 'password' => 'short']);
+        $this->assertGraphQlError($tooShort, Response::HTTP_UNPROCESSABLE_ENTITY, 'too short');
+
+        $user = $this->users()->findOneByEmail($email);
+        self::assertInstanceOf(User::class, $user);
+        self::assertFalse($user->isVerified());
+        self::assertNotNull($user->getEmailVerificationToken());
+
+        $verify = $this->graphql(<<<'GRAPHQL'
+            mutation($token: String!, $password: String!) {
+              verifyEmailUser(input: { token: $token, password: $password }) {
+                user {
+                  success
+                }
+              }
+            }
+            GRAPHQL, variables: ['token' => $token, 'password' => $password]);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $verify);
+
+        $login = $this->loginMutation($email, $password);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $login);
+    }
+
     public function testRefreshRejectsUnverifiedAccountWithoutConsumingTheToken(): void
     {
         $email = 'graphql-unverified-refresh@example.com';
@@ -1052,6 +1102,55 @@ final class AuthGraphQlTest extends WebTestCase
         $otherRefresh = $this->refreshMutation($other['refreshToken']);
         self::assertResponseIsSuccessful();
         self::assertArrayNotHasKey('errors', $otherRefresh);
+    }
+
+    public function testLogoutOfOneSessionLeavesTheOtherAccessTokenValid(): void
+    {
+        $email = 'graphql-logout-one@example.com';
+        $password = 'password123';
+        $first = $this->registerVerifyAndLogin($email, $password);
+        $second = $this->tokensFromLogin($this->loginMutation($email, $password));
+
+        $logout = $this->graphql(<<<'GRAPHQL'
+            mutation($refreshToken: String) {
+              logoutUser(input: { refreshToken: $refreshToken }) {
+                user {
+                  success
+                }
+              }
+            }
+            GRAPHQL, $first['token'], ['refreshToken' => $first['refreshToken']]);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $logout);
+
+        $loggedOut = $this->graphql(<<<'GRAPHQL'
+            {
+              meUser {
+                email
+              }
+            }
+            GRAPHQL, $first['token']);
+        $this->assertGraphQlAccessDenied($loggedOut);
+
+        $stillIn = $this->graphql(<<<'GRAPHQL'
+            {
+              meUser {
+                email
+              }
+            }
+            GRAPHQL, $second['token']);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $stillIn);
+
+        $this->assertGraphQlError(
+            $this->refreshMutation($first['refreshToken']),
+            Response::HTTP_UNAUTHORIZED,
+            'Invalid refresh token.',
+        );
+
+        $kept = $this->refreshMutation($second['refreshToken']);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $kept);
     }
 
     public function testRegisterRejectsAPasswordArgument(): void
