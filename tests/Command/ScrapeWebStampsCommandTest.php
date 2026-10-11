@@ -111,6 +111,66 @@ final class ScrapeWebStampsCommandTest extends TestCase
         }
     }
 
+    public function testRejectsNonIntegerLimitBeforeScraping(): void
+    {
+        $requests = 0;
+        $client = new MockHttpClient(function () use (&$requests): MockResponse {
+            ++$requests;
+
+            return new MockResponse('unused');
+        });
+
+        $tester = $this->tester($client, sys_get_temp_dir());
+
+        try {
+            $tester->execute([
+                '--limit' => 'abc',
+                '--output' => 'tz-web',
+            ]);
+            self::fail('A non-integer --limit must abort the command.');
+        } catch (\InvalidArgumentException $e) {
+            self::assertSame('--limit must be an integer', $e->getMessage());
+        }
+
+        self::assertSame(0, $requests);
+    }
+
+    public function testNegativeLimitSkipsDetailFetchesAndSucceeds(): void
+    {
+        $listHtml = file_get_contents(__DIR__.'/../fixtures/stamp_web/items_list.html');
+        $lazyJson = file_get_contents(__DIR__.'/../fixtures/stamp_web/lazy_page1.json');
+        $client = new MockHttpClient(function (string $method, string $url) use ($listHtml, $lazyJson): MockResponse {
+            if (str_contains($url, '/items/lazy')) {
+                return new MockResponse($lazyJson, ['response_headers' => ['content-type' => 'application/json']]);
+            }
+            if (1 === preg_match('#/items/\d+$#', $url)) {
+                self::fail('A negative limit must not fetch stamp details: '.$url);
+            }
+            if (str_contains($url, '/items?') || str_ends_with($url, '/items')) {
+                return new MockResponse($listHtml, ['response_headers' => ['content-type' => 'text/html']]);
+            }
+
+            self::fail('Unexpected URL: '.$url);
+        });
+
+        $projectDir = $this->projectDir();
+
+        try {
+            $tester = $this->tester($client, $projectDir);
+            $exit = $tester->execute([
+                ...$this->fastOptions('tz-web'),
+                '--limit' => '-3',
+            ]);
+
+            self::assertSame(Command::SUCCESS, $exit);
+            $display = $tester->getDisplay();
+            self::assertStringContainsString('discovered=0 scraped=0 skipped=0 failed=0 images=0', $display);
+            self::assertStringContainsString('Web scrape finished.', $display);
+        } finally {
+            $this->removeTree($projectDir);
+        }
+    }
+
     public function testLimitZeroSkipsDetailFetchesAndSucceeds(): void
     {
         $listHtml = file_get_contents(__DIR__.'/../fixtures/stamp_web/items_list.html');
