@@ -336,6 +336,59 @@ CSV);
         }
     }
 
+    public function testSameNumberInRegularAndAnnualCatalogsStaysDistinct(): void
+    {
+        $this->writeCsv('cs-stamps.csv', <<<'CSV'
+"Číslo";"Název";"Země";"Typ"
+"1";"  Běžná  ";"  Česká Republika  ";"  Turistická známka  "
+CSV);
+        $this->writeCsv('cs-annual.csv', <<<'CSV'
+"Číslo";"Název"
+"1";"Výroční"
+CSV);
+
+        $result = $this->importService->import($this->fixtureDir);
+
+        self::assertSame(2, $result['stamps']);
+        self::assertSame(2, $result['files']);
+        self::assertSame(2, $this->stampRepository->count([]));
+
+        $regular = $this->stampRepository->findOneByIdentity(StampCountry::Cz, StampType::Regular, 1);
+        $annual = $this->stampRepository->findOneByIdentity(StampCountry::Cz, StampType::Annual, 1);
+        self::assertInstanceOf(Stamp::class, $regular);
+        self::assertInstanceOf(Stamp::class, $annual);
+        self::assertSame('Běžná', $regular->getName());
+        self::assertSame('Výroční', $annual->getName());
+        self::assertNotSame($regular->getId(), $annual->getId());
+    }
+
+    public function testReimportClearsBlankDistrictRegionTagsAndPlaces(): void
+    {
+        $this->importService->import($this->fixtureDir);
+
+        $stamp = $this->stampRepository->findOneByIdentity(StampCountry::Cz, StampType::Regular, 1);
+        self::assertInstanceOf(Stamp::class, $stamp);
+        self::assertSame('Bruntál', $stamp->getDistrict());
+        self::assertSame('Moravskoslezský kraj', $stamp->getRegion());
+        self::assertGreaterThan(0, $stamp->getTags()->count());
+        self::assertGreaterThan(0, $stamp->getPlaces()->count());
+
+        $this->writeCsv('cs-stamps.csv', <<<'CSV'
+"Číslo";"Název";"Země";"Typ";"Kategorie";"Okres";"Kraj";"Prodejní místa (název a web)"
+"1";"Praděd";"Česká Republika";"Turistická známka";;;;
+CSV);
+
+        $this->importService->import($this->fixtureDir);
+
+        $stamp = $this->stampRepository->findOneByIdentity(StampCountry::Cz, StampType::Regular, 1);
+        self::assertInstanceOf(Stamp::class, $stamp);
+        self::assertSame('Praděd', $stamp->getName());
+        self::assertNull($stamp->getDistrict());
+        self::assertNull($stamp->getRegion());
+        self::assertCount(0, $stamp->getTags());
+        self::assertCount(0, $stamp->getPlaces());
+    }
+
     public function testReimportReplacesTagsAndPlaces(): void
     {
         $this->importService->import($this->fixtureDir);

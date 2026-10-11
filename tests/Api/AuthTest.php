@@ -1582,6 +1582,46 @@ final class AuthTest extends WebTestCase
         self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
     }
 
+    public function testLogoutWithUnknownRefreshTokenLeavesTheOtherSession(): void
+    {
+        $email = 'logout-unknown-refresh@example.com';
+        $password = 'password123';
+        $this->registerAndVerify($email, $password);
+        $first = $this->login($email, $password);
+        $second = $this->login($email, $password);
+
+        $this->client->request(
+            'POST',
+            '/api/logout',
+            server: [
+                'HTTP_AUTHORIZATION' => 'Bearer '.$first['token'],
+                'CONTENT_TYPE' => 'application/json',
+            ],
+            content: json_encode(['refresh_token' => 'not-a-real-refresh-token'], \JSON_THROW_ON_ERROR),
+        );
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+
+        $this->client->request('GET', '/api/me', server: [
+            'HTTP_AUTHORIZATION' => 'Bearer '.$first['token'],
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+
+        $this->client->request('GET', '/api/me', server: [
+            'HTTP_AUTHORIZATION' => 'Bearer '.$second['token'],
+        ]);
+        self::assertResponseIsSuccessful();
+
+        $this->jsonRequest('POST', '/api/token/refresh', [
+            'refresh_token' => $first['refresh_token'],
+        ]);
+        self::assertResponseIsSuccessful();
+
+        $this->jsonRequest('POST', '/api/token/refresh', [
+            'refresh_token' => $second['refresh_token'],
+        ]);
+        self::assertResponseIsSuccessful();
+    }
+
     public function testLogoutWithForeignRefreshTokenDoesNotRevokeOtherSession(): void
     {
         $this->registerAndVerify('owner@example.com', 'password123');

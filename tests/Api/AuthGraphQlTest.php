@@ -1166,6 +1166,28 @@ final class AuthGraphQlTest extends WebTestCase
         self::assertArrayNotHasKey('errors', $login);
     }
 
+    public function testForgotPasswordForUnknownEmailSendsNothing(): void
+    {
+        $forgot = $this->graphql(<<<'GRAPHQL'
+            mutation($email: String!) {
+              forgotPasswordUser(input: { email: $email }) {
+                user {
+                  success
+                }
+              }
+            }
+            GRAPHQL, variables: ['email' => 'nobody-graphql@example.com']);
+
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $forgot);
+        self::assertEmailCount(0);
+
+        $data = $this->stringKeyedArray($forgot['data'] ?? null, 'forgot data');
+        $payload = $this->stringKeyedArray($data['forgotPasswordUser'] ?? null, 'forgotPasswordUser');
+        $user = $this->stringKeyedArray($payload['user'] ?? null, 'forgotPasswordUser.user');
+        self::assertTrue($user['success'] ?? false);
+    }
+
     /**
      * @return array<string, mixed>
      */

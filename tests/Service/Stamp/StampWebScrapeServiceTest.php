@@ -98,7 +98,15 @@ final class StampWebScrapeServiceTest extends TestCase
         self::assertSame('ARCHIVE-IMG', file_get_contents($archivePath));
 
         self::assertFileExists($outputDir.'/index.jsonl');
+        $index = file_get_contents($outputDir.'/index.jsonl');
+        self::assertSame(1, substr_count($index, "\n"));
         self::assertFileExists($outputDir.'/scrape-meta.json');
+        $meta = json_decode(file_get_contents($outputDir.'/scrape-meta.json'), true);
+        self::assertIsArray($meta);
+        self::assertIsString($meta['startedAt'] ?? null);
+        self::assertIsString($meta['finishedAt'] ?? null);
+        self::assertSame(1, $meta['discovered'] ?? null);
+        self::assertIsArray($meta['options'] ?? null);
 
         // Resume skips existing stamp.json
         $stats2 = $service->scrape(new StampWebScrapeOptions(
@@ -113,6 +121,7 @@ final class StampWebScrapeServiceTest extends TestCase
         ));
         self::assertSame(1, $stats2['skipped']);
         self::assertSame(0, $stats2['scraped']);
+        self::assertSame(1, substr_count(file_get_contents($outputDir.'/index.jsonl'), "\n"));
     }
 
     public function testScrapeSanitizesImageSrcPathTraversal(): void
@@ -528,6 +537,109 @@ final class StampWebScrapeServiceTest extends TestCase
         self::assertFileDoesNotExist($outputDir.'/stamps/12/stamp.json');
     }
 
+    public function testDiscoveryStopsWhenALaterPageIsEmpty(): void
+    {
+        $listHtml = file_get_contents(__DIR__.'/../../fixtures/stamp_web/items_list.html');
+        $detailHtml = file_get_contents(__DIR__.'/../../fixtures/stamp_web/item_detail.html');
+        $page1 = json_encode([
+            'items' => [
+                ['id' => 10, 'no' => 1, 'name' => 'A'],
+            ],
+            'totalRecords' => 500,
+            'itemsPerPage' => 1,
+            'currentPage' => 1,
+        ], \JSON_THROW_ON_ERROR);
+        $emptyPage = json_encode([
+            'items' => [],
+            'totalRecords' => 500,
+            'itemsPerPage' => 1,
+            'currentPage' => 2,
+        ], \JSON_THROW_ON_ERROR);
+
+        $lazyPages = [];
+        $client = new MockHttpClient(function (string $method, string $url) use ($listHtml, $detailHtml, $page1, $emptyPage, &$lazyPages): MockResponse {
+            if (str_contains($url, '/items/lazy')) {
+                $lazyPages[] = $this->lazyPageNumber($url);
+                $page = $lazyPages[\count($lazyPages) - 1];
+                if (1 === $page) {
+                    return new MockResponse($page1, ['response_headers' => ['content-type' => 'application/json']]);
+                }
+                if (2 === $page) {
+                    return new MockResponse($emptyPage, ['response_headers' => ['content-type' => 'application/json']]);
+                }
+
+                self::fail('An empty page must stop discovery. Unexpected page: '.$page);
+            }
+            if (1 === preg_match('#/items/(\d+)$#', $url)) {
+                return new MockResponse($detailHtml, ['response_headers' => ['content-type' => 'text/html']]);
+            }
+            if (str_contains($url, '/storage/item_images/')) {
+                self::fail('skipImages must not download images: '.$url);
+            }
+            if (str_contains($url, '/items?') || str_ends_with($url, '/items')) {
+                return new MockResponse($listHtml, ['response_headers' => ['content-type' => 'text/html']]);
+            }
+
+            self::fail('Unexpected URL: '.$url);
+        });
+
+        $outputDir = sys_get_temp_dir().'/znamky-scrape-'.bin2hex(random_bytes(4));
+        $stats = (new StampWebScrapeService($client))->scrape($this->quietOptions($outputDir, limit: null, skipImages: true));
+
+        self::assertSame([1, 2], $lazyPages);
+        self::assertSame(1, $stats['discovered']);
+        self::assertSame(1, $stats['scraped']);
+        self::assertSame(0, $stats['failed']);
+        self::assertFileExists($outputDir.'/stamps/10/stamp.json');
+    }
+
+    public function testDiscoveryStopsWhenPageSizeIsZero(): void
+    {
+        $listHtml = file_get_contents(__DIR__.'/../../fixtures/stamp_web/items_list.html');
+        $detailHtml = file_get_contents(__DIR__.'/../../fixtures/stamp_web/item_detail.html');
+        $page = json_encode([
+            'items' => [
+                ['id' => 10, 'no' => 1, 'name' => 'A'],
+            ],
+            'totalRecords' => 500,
+            'itemsPerPage' => 0,
+            'currentPage' => 1,
+        ], \JSON_THROW_ON_ERROR);
+
+        $lazyPages = [];
+        $client = new MockHttpClient(function (string $method, string $url) use ($listHtml, $detailHtml, $page, &$lazyPages): MockResponse {
+            if (str_contains($url, '/items/lazy')) {
+                $pageNumber = $this->lazyPageNumber($url);
+                $lazyPages[] = $pageNumber;
+                if (1 !== $pageNumber) {
+                    self::fail('A zero page size must stop discovery. Unexpected page: '.$pageNumber);
+                }
+
+                return new MockResponse($page, ['response_headers' => ['content-type' => 'application/json']]);
+            }
+            if (1 === preg_match('#/items/(\d+)$#', $url)) {
+                return new MockResponse($detailHtml, ['response_headers' => ['content-type' => 'text/html']]);
+            }
+            if (str_contains($url, '/storage/item_images/')) {
+                self::fail('skipImages must not download images: '.$url);
+            }
+            if (str_contains($url, '/items?') || str_ends_with($url, '/items')) {
+                return new MockResponse($listHtml, ['response_headers' => ['content-type' => 'text/html']]);
+            }
+
+            self::fail('Unexpected URL: '.$url);
+        });
+
+        $outputDir = sys_get_temp_dir().'/znamky-scrape-'.bin2hex(random_bytes(4));
+        $stats = (new StampWebScrapeService($client))->scrape($this->quietOptions($outputDir, limit: null, skipImages: true));
+
+        self::assertSame([1], $lazyPages);
+        self::assertSame(1, $stats['discovered']);
+        self::assertSame(1, $stats['scraped']);
+        self::assertSame(0, $stats['failed']);
+        self::assertFileExists($outputDir.'/stamps/10/stamp.json');
+    }
+
     public function testUnmatchedCountryFilterAbortsBeforeDiscovery(): void
     {
         $listHtml = file_get_contents(__DIR__.'/../../fixtures/stamp_web/items_list.html');
@@ -664,6 +776,17 @@ final class StampWebScrapeServiceTest extends TestCase
         self::assertFileExists($stampDir.'/stamp.json');
         self::assertSame('ORIGINAL', file_get_contents($currentPath));
         self::assertSame('ORIGINAL', file_get_contents($archivePath));
+    }
+
+    private function lazyPageNumber(string $url): int
+    {
+        $query = parse_url($url, \PHP_URL_QUERY);
+        self::assertIsString($query);
+        parse_str($query, $params);
+        $page = $params['page'] ?? null;
+        self::assertIsScalar($page);
+
+        return (int) $page;
     }
 
     private function quietOptions(
