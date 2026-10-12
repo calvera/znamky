@@ -167,6 +167,25 @@ CSV);
         self::assertNull($this->stampRepository->findOneByIdentity(StampCountry::Cz, StampType::Regular, 0));
     }
 
+    public function testImportSkipsNumberedRowsWhoseNameIsBlank(): void
+    {
+        $this->writeCsv('cs-stamps.csv', <<<'CSV'
+"Číslo";"Název";"Země";"Typ"
+"7";"";"Česká Republika";"Turistická známka"
+"8";"   ";"Česká Republika";"Turistická známka"
+"9";"Kept";"Česká Republika";"Turistická známka"
+CSV);
+
+        $this->importService->import($this->fixtureDir);
+
+        self::assertSame(1, $this->stampRepository->count([]));
+        $stamp = $this->stampRepository->findOneByIdentity(StampCountry::Cz, StampType::Regular, 9);
+        self::assertInstanceOf(Stamp::class, $stamp);
+        self::assertSame('Kept', $stamp->getName());
+        self::assertNull($this->stampRepository->findOneByIdentity(StampCountry::Cz, StampType::Regular, 7));
+        self::assertNull($this->stampRepository->findOneByIdentity(StampCountry::Cz, StampType::Regular, 8));
+    }
+
     public function testCountryAndTypeComeFromColumnsOrFileDefaults(): void
     {
         $this->writeCsv('cs-stamps.csv', <<<'CSV'
