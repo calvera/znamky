@@ -135,6 +135,30 @@ final class ScrapeWebStampsCommandTest extends TestCase
         self::assertSame(0, $requests);
     }
 
+    public function testRejectsNonIntegerRetriesBeforeScraping(): void
+    {
+        $requests = 0;
+        $client = new MockHttpClient(function () use (&$requests): MockResponse {
+            ++$requests;
+
+            return new MockResponse('unused');
+        });
+
+        $tester = $this->tester($client, sys_get_temp_dir());
+
+        try {
+            $tester->execute([
+                '--retries' => 'abc',
+                '--output' => 'tz-web',
+            ]);
+            self::fail('A non-integer --retries must abort the command.');
+        } catch (\InvalidArgumentException $e) {
+            self::assertSame('--retries must be an integer', $e->getMessage());
+        }
+
+        self::assertSame(0, $requests);
+    }
+
     public function testNegativeLimitSkipsDetailFetchesAndSucceeds(): void
     {
         $listHtml = file_get_contents(__DIR__.'/../fixtures/stamp_web/items_list.html');

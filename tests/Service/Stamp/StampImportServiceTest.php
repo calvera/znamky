@@ -167,6 +167,39 @@ CSV);
         self::assertNull($this->stampRepository->findOneByIdentity(StampCountry::Cz, StampType::Regular, 0));
     }
 
+    public function testQuotedSemicolonAndMultilinePlaceCellStayOneRow(): void
+    {
+        $this->writeCsv('cs-stamps.csv', <<<'CSV'
+"Číslo";"Název";"Země";"Typ";"Kategorie";"Okres";"Kraj";"Prodejní místa (název a web)"
+"1";"Praděd";"Česká Republika";"Turistická známka";"Hory";"Bruntál";"Moravskoslezský kraj";"Chata A; pobočka (http://a.example)
+Chata B (http://b.example)"
+"2";"Hotel A; pobočka";"Česká Republika";"Turistická známka";;;;
+CSV);
+
+        $result = $this->importService->import($this->fixtureDir);
+
+        self::assertSame(2, $result['stamps']);
+        self::assertSame(2, $result['places']);
+
+        $first = $this->stampRepository->findOneByIdentity(StampCountry::Cz, StampType::Regular, 1);
+        $second = $this->stampRepository->findOneByIdentity(StampCountry::Cz, StampType::Regular, 2);
+        self::assertInstanceOf(Stamp::class, $first);
+        self::assertInstanceOf(Stamp::class, $second);
+        self::assertSame('Praděd', $first->getName());
+        self::assertSame('Hotel A; pobočka', $second->getName());
+        self::assertCount(0, $second->getPlaces());
+
+        $places = [];
+        foreach ($first->getPlaces() as $place) {
+            $places[$place->getName()] = $place->getUrl();
+        }
+        ksort($places);
+        self::assertSame([
+            'Chata A; pobočka' => 'http://a.example',
+            'Chata B' => 'http://b.example',
+        ], $places);
+    }
+
     public function testCountryAndTypeComeFromColumnsOrFileDefaults(): void
     {
         $this->writeCsv('cs-stamps.csv', <<<'CSV'

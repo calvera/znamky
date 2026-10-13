@@ -891,6 +891,107 @@ final class StampWebScrapeServiceTest extends TestCase
         self::assertSame('ORIGINAL', file_get_contents($archivePath));
     }
 
+    public function testImageDownloadFailureDoesNotPersistStampJsonOrStopTheNextStamp(): void
+    {
+        $listHtml = file_get_contents(__DIR__.'/../../fixtures/stamp_web/items_list.html');
+        $detailHtml = file_get_contents(__DIR__.'/../../fixtures/stamp_web/item_detail.html');
+        $images = '&quot;images&quot;: [{&quot;id&quot;: 1, &quot;item_id&quot;: 3535, &quot;archive&quot;: 0, &quot;src&quot;: &quot;current.png&quot;, &quot;sort&quot;: 30}, {&quot;id&quot;: 2, &quot;item_id&quot;: 3535, &quot;archive&quot;: 1, &quot;src&quot;: &quot;archive.png&quot;, &quot;sort&quot;: 10}]';
+        self::assertStringContainsString($images, $detailHtml);
+        $emptyImagesHtml = str_replace($images, '&quot;images&quot;: []', $detailHtml);
+        $lazyJson = json_encode([
+            'items' => [
+                ['id' => 10, 'no' => 1, 'name' => 'Broken'],
+                ['id' => 11, 'no' => 2, 'name' => 'Kept'],
+            ],
+            'totalRecords' => 2,
+            'itemsPerPage' => 100,
+            'currentPage' => 1,
+        ], \JSON_THROW_ON_ERROR);
+        $archiveAttempts = 0;
+
+        $client = new MockHttpClient(function (string $method, string $url) use ($listHtml, $detailHtml, $emptyImagesHtml, $lazyJson, &$archiveAttempts): MockResponse {
+            if (str_contains($url, '/items/lazy')) {
+                return new MockResponse($lazyJson, ['response_headers' => ['content-type' => 'application/json']]);
+            }
+            if (str_contains($url, '/items/10')) {
+                return new MockResponse($detailHtml, ['response_headers' => ['content-type' => 'text/html']]);
+            }
+            if (str_contains($url, '/items/11')) {
+                return new MockResponse($emptyImagesHtml, ['response_headers' => ['content-type' => 'text/html']]);
+            }
+            if (str_contains($url, '/storage/item_images/medium/current.png')) {
+                return new MockResponse('CURRENT', ['response_headers' => ['content-type' => 'image/png']]);
+            }
+            if (str_contains($url, '/storage/item_images/medium/archive.png')) {
+                ++$archiveAttempts;
+
+                return new MockResponse('missing', ['http_code' => 404]);
+            }
+            if (str_contains($url, '/items?') || str_ends_with($url, '/items')) {
+                return new MockResponse($listHtml, ['response_headers' => ['content-type' => 'text/html']]);
+            }
+
+            self::fail('Unexpected URL: '.$url);
+        });
+
+        $outputDir = sys_get_temp_dir().'/znamky-scrape-'.bin2hex(random_bytes(4));
+        $stats = (new StampWebScrapeService($client))->scrape($this->quietOptions($outputDir, retries: 3));
+
+        self::assertSame(1, $archiveAttempts);
+        self::assertSame(2, $stats['discovered']);
+        self::assertSame(1, $stats['scraped']);
+        self::assertSame(1, $stats['failed']);
+        self::assertSame(0, $stats['images']);
+        self::assertFileDoesNotExist($outputDir.'/stamps/10/stamp.json');
+        self::assertFileExists($outputDir.'/stamps/10/images/current/current.png');
+        self::assertSame('CURRENT', file_get_contents($outputDir.'/stamps/10/images/current/current.png'));
+        self::assertFileExists($outputDir.'/stamps/11/stamp.json');
+
+        $index = file_get_contents($outputDir.'/index.jsonl');
+        self::assertSame(1, substr_count($index, "\n"));
+        $row = json_decode(trim($index), true);
+        self::assertIsArray($row);
+        self::assertSame(11, $row['id'] ?? null);
+
+        $resumeAttempts = 0;
+        $resumeClient = new MockHttpClient(function (string $method, string $url) use ($listHtml, $detailHtml, $lazyJson, &$resumeAttempts): MockResponse {
+            if (str_contains($url, '/items/lazy')) {
+                return new MockResponse($lazyJson, ['response_headers' => ['content-type' => 'application/json']]);
+            }
+            if (str_contains($url, '/items/11')) {
+                self::fail('A stamp with stamp.json must be skipped: '.$url);
+            }
+            if (str_contains($url, '/items/10')) {
+                return new MockResponse($detailHtml, ['response_headers' => ['content-type' => 'text/html']]);
+            }
+            if (str_contains($url, '/storage/item_images/medium/current.png')) {
+                self::fail('An image already on disk must not be downloaded again: '.$url);
+            }
+            if (str_contains($url, '/storage/item_images/medium/archive.png')) {
+                ++$resumeAttempts;
+
+                return new MockResponse('ARCHIVE', ['response_headers' => ['content-type' => 'image/png']]);
+            }
+            if (str_contains($url, '/items?') || str_ends_with($url, '/items')) {
+                return new MockResponse($listHtml, ['response_headers' => ['content-type' => 'text/html']]);
+            }
+
+            self::fail('Unexpected URL: '.$url);
+        });
+
+        $resumed = (new StampWebScrapeService($resumeClient))->scrape($this->quietOptions($outputDir, retries: 0));
+
+        self::assertSame(1, $resumeAttempts);
+        self::assertSame(1, $resumed['scraped']);
+        self::assertSame(1, $resumed['skipped']);
+        self::assertSame(0, $resumed['failed']);
+        self::assertSame(2, $resumed['images']);
+        self::assertFileExists($outputDir.'/stamps/10/stamp.json');
+        self::assertSame('CURRENT', file_get_contents($outputDir.'/stamps/10/images/current/current.png'));
+        self::assertSame('ARCHIVE', file_get_contents($outputDir.'/stamps/10/images/archive/archive.png'));
+        self::assertSame(2, substr_count(file_get_contents($outputDir.'/index.jsonl'), "\n"));
+    }
+
     private function lazyPageNumber(string $url): int
     {
         $query = parse_url($url, \PHP_URL_QUERY);

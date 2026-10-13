@@ -1355,6 +1355,37 @@ final class AuthTest extends WebTestCase
         $this->login($email, $password);
     }
 
+    public function testOversizedVerificationPasswordDoesNotConsumeTheToken(): void
+    {
+        $email = 'long-verify@example.com';
+        $password = 'password123';
+        $this->jsonRequest('POST', '/api/register', [
+            'email' => $email,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
+        $token = $this->extractTokenFromLastEmail();
+
+        $this->jsonRequest('POST', '/api/verify-email', [
+            'token' => $token,
+            'password' => str_repeat('a', 4097),
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
+        $body = $this->jsonResponse();
+        $violations = $body['violations'] ?? null;
+        if (!\is_array($violations)) {
+            self::fail('Expected violations array.');
+        }
+        $paths = array_column($violations, 'propertyPath');
+        self::assertContains('password', $paths);
+
+        $this->jsonRequest('POST', '/api/verify-email', [
+            'token' => $token,
+            'password' => $password,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+        $this->login($email, $password);
+    }
+
     public function testIssuedAuthTokensExpireOnTheirExpectedWindows(): void
     {
         $email = 'token-lifetime@example.com';
