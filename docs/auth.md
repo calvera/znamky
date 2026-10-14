@@ -173,7 +173,10 @@ Content-Type: application/json
 
 **204**. The access token is blocklisted.
 
-- If `refresh_token` is provided, that refresh token is revoked.
+- If `refresh_token` is provided and still valid, that refresh token is revoked.
+- If it was already spent, the refresh chain it belonged to is revoked (the same
+  reuse detection as `POST /api/token/refresh`). Other sessions stay signed in.
+  A token that was never issued does not revoke anything.
 - If it is omitted (or `null`), **all** refresh tokens for the user are revoked,
   and every JWT issued before that logout is rejected for the rest of its `token_ttl`.
 

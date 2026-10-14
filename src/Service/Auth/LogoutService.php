@@ -7,6 +7,7 @@ namespace App\Service\Auth;
 use App\Entity\User;
 use Gesdinet\JWTRefreshTokenBundle\Model\RefreshTokenManagerInterface;
 use Gesdinet\JWTRefreshTokenBundle\Model\RevokeRefreshTokenManagerInterface;
+use Gesdinet\JWTRefreshTokenBundle\Security\ReuseDetection\RefreshTokenReuseDetector;
 use Lexik\Bundle\JWTAuthenticationBundle\Services\BlockedTokenManagerInterface;
 use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
 use Lexik\Bundle\JWTAuthenticationBundle\TokenExtractor\TokenExtractorInterface;
@@ -20,6 +21,7 @@ final class LogoutService
         private readonly BlockedTokenManagerInterface $blockedTokenManager,
         private readonly JWTTokenManagerInterface $jwtManager,
         private readonly TokenExtractorInterface $tokenExtractor,
+        private readonly RefreshTokenReuseDetector $refreshTokenReuseDetector,
     ) {
     }
 
@@ -31,6 +33,10 @@ final class LogoutService
             $stored = $this->refreshTokenManager->get($refreshToken);
             if (null !== $stored && $stored->getUsername() === $user->getUserIdentifier()) {
                 $this->refreshTokenManager->delete($stored);
+            } elseif (null === $stored) {
+                // Already rotated tokens are gone from storage. Presenting one here is the
+                // same signal as a refresh replay: end that chain, leave other sessions alone.
+                $this->refreshTokenReuseDetector->unknownTokenPresented($refreshToken, $request);
             }
 
             return;

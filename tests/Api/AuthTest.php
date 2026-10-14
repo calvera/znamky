@@ -1622,6 +1622,50 @@ final class AuthTest extends WebTestCase
         self::assertResponseIsSuccessful();
     }
 
+    public function testLogoutOfASpentRefreshTokenRevokesTheRotatedSession(): void
+    {
+        $email = 'logout-spent-refresh@example.com';
+        $password = 'password123';
+        $this->registerAndVerify($email, $password);
+        $stolen = $this->login($email, $password);
+        $other = $this->login($email, $password);
+
+        $this->jsonRequest('POST', '/api/token/refresh', [
+            'refresh_token' => $stolen['refresh_token'],
+        ]);
+        self::assertResponseIsSuccessful();
+        $rotated = $this->jsonResponse();
+        $rotatedRefresh = $rotated['refresh_token'] ?? null;
+        self::assertIsString($rotatedRefresh);
+        self::assertNotSame($stolen['refresh_token'], $rotatedRefresh);
+
+        $this->client->request(
+            'POST',
+            '/api/logout',
+            server: [
+                'HTTP_AUTHORIZATION' => 'Bearer '.$stolen['token'],
+                'CONTENT_TYPE' => 'application/json',
+            ],
+            content: json_encode(['refresh_token' => $stolen['refresh_token']], \JSON_THROW_ON_ERROR),
+        );
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+
+        $this->jsonRequest('POST', '/api/token/refresh', [
+            'refresh_token' => $rotatedRefresh,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+
+        $this->client->request('GET', '/api/me', server: [
+            'HTTP_AUTHORIZATION' => 'Bearer '.$other['token'],
+        ]);
+        self::assertResponseIsSuccessful();
+
+        $this->jsonRequest('POST', '/api/token/refresh', [
+            'refresh_token' => $other['refresh_token'],
+        ]);
+        self::assertResponseIsSuccessful();
+    }
+
     public function testLogoutWithForeignRefreshTokenDoesNotRevokeOtherSession(): void
     {
         $this->registerAndVerify('owner@example.com', 'password123');

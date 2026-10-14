@@ -226,7 +226,7 @@ final class AuthOpenApiFactory implements OpenApiFactoryInterface
                 (string) HttpResponse::HTTP_UNAUTHORIZED => new Response(description: 'Missing or invalid JWT'),
             ],
             summary: 'Logout',
-            description: 'Blocklists the current JWT. If `refresh_token` is sent, that refresh token is revoked; otherwise all refresh tokens for the user are revoked and JWTs issued before the logout are rejected.',
+            description: 'Blocklists the current JWT. If `refresh_token` is sent, that refresh token is revoked, and a token that was already rotated also revokes the rest of its refresh chain. If `refresh_token` is omitted, all refresh tokens for the user are revoked and JWTs issued before the logout are rejected.',
             requestBody: new RequestBody(
                 description: 'Optional refresh token to revoke (omit to revoke all for the user)',
                 content: new \ArrayObject([
