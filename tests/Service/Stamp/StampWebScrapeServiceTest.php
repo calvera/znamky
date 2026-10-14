@@ -891,6 +891,117 @@ final class StampWebScrapeServiceTest extends TestCase
         self::assertSame('ORIGINAL', file_get_contents($archivePath));
     }
 
+    public function testNullImageSrcIsSkippedAndStringArchiveFlagIsFiledAsArchive(): void
+    {
+        $listHtml = file_get_contents(__DIR__.'/../../fixtures/stamp_web/items_list.html');
+        $lazyJson = file_get_contents(__DIR__.'/../../fixtures/stamp_web/lazy_page1.json');
+        $detailHtml = str_replace(
+            '&quot;src&quot;: &quot;current.png&quot;',
+            '&quot;src&quot;: null',
+            file_get_contents(__DIR__.'/../../fixtures/stamp_web/item_detail.html'),
+        );
+        $detailHtml = str_replace(
+            '&quot;archive&quot;: 1',
+            '&quot;archive&quot;: &quot;1&quot;',
+            $detailHtml,
+        );
+
+        $client = new MockHttpClient(function (string $method, string $url) use ($listHtml, $detailHtml, $lazyJson): MockResponse {
+            if (str_contains($url, '/items/lazy')) {
+                return new MockResponse($lazyJson, ['response_headers' => ['content-type' => 'application/json']]);
+            }
+            if (str_contains($url, '/items/3535')) {
+                return new MockResponse($detailHtml, ['response_headers' => ['content-type' => 'text/html']]);
+            }
+            if (str_contains($url, '/storage/item_images/medium/archive.png')) {
+                return new MockResponse('ARCHIVE', ['response_headers' => ['content-type' => 'image/png']]);
+            }
+            if (str_contains($url, '/storage/item_images/')) {
+                self::fail('A null image src must not be downloaded: '.$url);
+            }
+            if (str_contains($url, '/items?') || str_ends_with($url, '/items')) {
+                return new MockResponse($listHtml, ['response_headers' => ['content-type' => 'text/html']]);
+            }
+
+            self::fail('Unexpected URL: '.$url);
+        });
+
+        $outputDir = sys_get_temp_dir().'/znamky-scrape-'.bin2hex(random_bytes(4));
+        $stampDir = $outputDir.'/stamps/3535';
+        $stats = (new StampWebScrapeService($client))->scrape($this->quietOptions($outputDir));
+
+        self::assertSame(0, $stats['failed']);
+        self::assertSame(1, $stats['scraped']);
+        self::assertSame(1, $stats['images']);
+        self::assertFileExists($stampDir.'/stamp.json');
+        self::assertFileDoesNotExist($stampDir.'/images/current/current.png');
+        self::assertFileExists($stampDir.'/images/archive/archive.png');
+        self::assertSame('ARCHIVE', file_get_contents($stampDir.'/images/archive/archive.png'));
+        self::assertFileDoesNotExist($stampDir.'/images/current/archive.png');
+    }
+
+    public function testForceReplacesImagesAlreadyOnDisk(): void
+    {
+        $listHtml = file_get_contents(__DIR__.'/../../fixtures/stamp_web/items_list.html');
+        $detailHtml = file_get_contents(__DIR__.'/../../fixtures/stamp_web/item_detail.html');
+        $lazyJson = file_get_contents(__DIR__.'/../../fixtures/stamp_web/lazy_page1.json');
+
+        $firstClient = new MockHttpClient(function (string $method, string $url) use ($listHtml, $detailHtml, $lazyJson): MockResponse {
+            if (str_contains($url, '/items/lazy')) {
+                return new MockResponse($lazyJson, ['response_headers' => ['content-type' => 'application/json']]);
+            }
+            if (str_contains($url, '/items/3535')) {
+                return new MockResponse($detailHtml, ['response_headers' => ['content-type' => 'text/html']]);
+            }
+            if (str_contains($url, '/storage/item_images/medium/')) {
+                return new MockResponse('ORIGINAL', ['response_headers' => ['content-type' => 'image/png']]);
+            }
+            if (str_contains($url, '/items?') || str_ends_with($url, '/items')) {
+                return new MockResponse($listHtml, ['response_headers' => ['content-type' => 'text/html']]);
+            }
+
+            self::fail('Unexpected URL: '.$url);
+        });
+
+        $outputDir = sys_get_temp_dir().'/znamky-scrape-'.bin2hex(random_bytes(4));
+        $stampDir = $outputDir.'/stamps/3535';
+        (new StampWebScrapeService($firstClient))->scrape($this->quietOptions($outputDir));
+
+        $currentPath = $stampDir.'/images/current/current.png';
+        $archivePath = $stampDir.'/images/archive/archive.png';
+        self::assertSame('ORIGINAL', file_get_contents($currentPath));
+
+        $imageRequests = 0;
+        $forceClient = new MockHttpClient(function (string $method, string $url) use ($listHtml, $detailHtml, $lazyJson, &$imageRequests): MockResponse {
+            if (str_contains($url, '/items/lazy')) {
+                return new MockResponse($lazyJson, ['response_headers' => ['content-type' => 'application/json']]);
+            }
+            if (str_contains($url, '/items/3535')) {
+                return new MockResponse($detailHtml, ['response_headers' => ['content-type' => 'text/html']]);
+            }
+            if (str_contains($url, '/storage/item_images/medium/')) {
+                ++$imageRequests;
+
+                return new MockResponse('REPLACED', ['response_headers' => ['content-type' => 'image/png']]);
+            }
+            if (str_contains($url, '/items?') || str_ends_with($url, '/items')) {
+                return new MockResponse($listHtml, ['response_headers' => ['content-type' => 'text/html']]);
+            }
+
+            self::fail('Unexpected URL: '.$url);
+        });
+
+        $stats = (new StampWebScrapeService($forceClient))->scrape($this->quietOptions($outputDir, force: true));
+
+        self::assertSame(2, $imageRequests);
+        self::assertSame(1, $stats['scraped']);
+        self::assertSame(0, $stats['skipped']);
+        self::assertSame(0, $stats['failed']);
+        self::assertSame(2, $stats['images']);
+        self::assertSame('REPLACED', file_get_contents($currentPath));
+        self::assertSame('REPLACED', file_get_contents($archivePath));
+    }
+
     private function lazyPageNumber(string $url): int
     {
         $query = parse_url($url, \PHP_URL_QUERY);

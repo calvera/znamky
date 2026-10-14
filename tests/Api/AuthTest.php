@@ -690,6 +690,57 @@ final class AuthTest extends WebTestCase
         self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
     }
 
+    public function testVerificationTokenCannotResetPasswordAndResetTokenCannotVerify(): void
+    {
+        $email = 'token-confusion@example.com';
+        $verificationPassword = 'verify-password';
+        $resetPassword = 'reset-password1';
+
+        $this->jsonRequest('POST', '/api/register', [
+            'email' => $email,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
+        $verificationToken = $this->extractTokenFromLastEmail();
+
+        $this->jsonRequest('POST', '/api/forgot-password', ['email' => $email]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+        $resetToken = $this->extractTokenFromLastEmail();
+        self::assertNotSame($verificationToken, $resetToken);
+
+        $this->jsonRequest('POST', '/api/reset-password', [
+            'token' => $verificationToken,
+            'password' => $resetPassword,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
+        self::assertStringContainsString('Invalid password reset token.', (string) $this->client->getResponse()->getContent());
+
+        $this->jsonRequest('POST', '/api/verify-email', [
+            'token' => $resetToken,
+            'password' => $verificationPassword,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
+        self::assertStringContainsString('Invalid verification token.', (string) $this->client->getResponse()->getContent());
+
+        $user = static::getContainer()->get(UserRepository::class)->findOneByEmail($email);
+        self::assertInstanceOf(User::class, $user);
+        self::assertFalse($user->isVerified());
+        self::assertNotNull($user->getEmailVerificationToken());
+        self::assertNotNull($user->getPasswordResetToken());
+
+        $this->jsonRequest('POST', '/api/verify-email', [
+            'token' => $verificationToken,
+            'password' => $verificationPassword,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+
+        $this->jsonRequest('POST', '/api/reset-password', [
+            'token' => $resetToken,
+            'password' => $resetPassword,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+        $this->login($email, $resetPassword);
+    }
+
     public function testVerifySetsAccountPassword(): void
     {
         $email = 'victim@example.com';
@@ -1151,6 +1202,40 @@ final class AuthTest extends WebTestCase
         $this->jsonRequest('POST', '/api/reset-password', [
             'token' => $token,
             'password' => 'short',
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
+        $body = $this->jsonResponse();
+        $violations = $body['violations'] ?? null;
+        if (!\is_array($violations)) {
+            self::fail('Expected violations array.');
+        }
+        $paths = array_column($violations, 'propertyPath');
+        self::assertContains('password', $paths);
+
+        $this->login($email, $oldPassword);
+
+        $this->jsonRequest('POST', '/api/reset-password', [
+            'token' => $token,
+            'password' => $newPassword,
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+        $this->login($email, $newPassword);
+    }
+
+    public function testOversizedResetPasswordDoesNotConsumeTheToken(): void
+    {
+        $email = 'oversized-reset@example.com';
+        $oldPassword = 'password123';
+        $newPassword = 'newpassword456';
+        $this->registerAndVerify($email, $oldPassword);
+
+        $this->jsonRequest('POST', '/api/forgot-password', ['email' => $email]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+        $token = $this->extractTokenFromLastEmail();
+
+        $this->jsonRequest('POST', '/api/reset-password', [
+            'token' => $token,
+            'password' => str_repeat('a', 4097),
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
         $body = $this->jsonResponse();

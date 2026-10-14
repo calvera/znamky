@@ -1287,6 +1287,27 @@ final class AuthGraphQlTest extends WebTestCase
         self::assertTrue($user['success'] ?? false);
     }
 
+    public function testBlankRefreshTokenDoesNotRotateOrRevokeTheSession(): void
+    {
+        $tokens = $this->registerVerifyAndLogin('graphql-blank-refresh@example.com', 'password123');
+
+        $blank = $this->graphql(<<<'GRAPHQL'
+            mutation($refreshToken: String!) {
+              refreshTokenUser(input: { refreshToken: $refreshToken }) {
+                user {
+                  token
+                  refreshToken
+                }
+              }
+            }
+            GRAPHQL, variables: ['refreshToken' => '']);
+        $this->assertGraphQlError($blank, Response::HTTP_UNPROCESSABLE_ENTITY, 'blank');
+
+        $rotated = $this->tokensFromRefresh($this->refreshMutation($tokens['refreshToken']));
+        self::assertNotSame($tokens['refreshToken'], $rotated['refreshToken']);
+        self::assertNotSame('', $rotated['refreshToken']);
+    }
+
     /**
      * @return array<string, mixed>
      */

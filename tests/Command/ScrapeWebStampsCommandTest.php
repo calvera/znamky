@@ -208,6 +208,141 @@ final class ScrapeWebStampsCommandTest extends TestCase
         }
     }
 
+    public function testDefaultRunDownloadsImagesAndSkipImagesDoesNot(): void
+    {
+        $listHtml = file_get_contents(__DIR__.'/../fixtures/stamp_web/items_list.html');
+        $detailHtml = file_get_contents(__DIR__.'/../fixtures/stamp_web/item_detail.html');
+        $lazyJson = file_get_contents(__DIR__.'/../fixtures/stamp_web/lazy_page1.json');
+        $imageRequests = 0;
+        $downloadClient = new MockHttpClient(function (string $method, string $url) use ($listHtml, $detailHtml, $lazyJson, &$imageRequests): MockResponse {
+            if (str_contains($url, '/items/lazy')) {
+                return new MockResponse($lazyJson, ['response_headers' => ['content-type' => 'application/json']]);
+            }
+            if (str_contains($url, '/items/3535')) {
+                return new MockResponse($detailHtml, ['response_headers' => ['content-type' => 'text/html']]);
+            }
+            if (str_contains($url, '/storage/item_images/medium/')) {
+                ++$imageRequests;
+
+                return new MockResponse('IMG', ['response_headers' => ['content-type' => 'image/png']]);
+            }
+            if (str_contains($url, '/items?') || str_ends_with($url, '/items')) {
+                return new MockResponse($listHtml, ['response_headers' => ['content-type' => 'text/html']]);
+            }
+
+            self::fail('Unexpected URL: '.$url);
+        });
+        $skipClient = new MockHttpClient(function (string $method, string $url) use ($listHtml, $detailHtml, $lazyJson): MockResponse {
+            if (str_contains($url, '/items/lazy')) {
+                return new MockResponse($lazyJson, ['response_headers' => ['content-type' => 'application/json']]);
+            }
+            if (str_contains($url, '/items/3535')) {
+                return new MockResponse($detailHtml, ['response_headers' => ['content-type' => 'text/html']]);
+            }
+            if (str_contains($url, '/storage/item_images/')) {
+                self::fail('--skip-images must not download images: '.$url);
+            }
+            if (str_contains($url, '/items?') || str_ends_with($url, '/items')) {
+                return new MockResponse($listHtml, ['response_headers' => ['content-type' => 'text/html']]);
+            }
+
+            self::fail('Unexpected URL: '.$url);
+        });
+
+        $projectDir = $this->projectDir();
+
+        try {
+            $download = $this->fastOptions('tz-download');
+            unset($download['--skip-images']);
+            $downloadTester = $this->tester($downloadClient, $projectDir);
+            $exit = $downloadTester->execute($download);
+
+            self::assertSame(Command::SUCCESS, $exit);
+            self::assertSame(2, $imageRequests);
+            self::assertStringContainsString('images=2', $downloadTester->getDisplay());
+            $downloaded = $projectDir.\DIRECTORY_SEPARATOR.'tz-download'.\DIRECTORY_SEPARATOR.'stamps'.\DIRECTORY_SEPARATOR.'3535';
+            self::assertFileExists($downloaded.\DIRECTORY_SEPARATOR.'images'.\DIRECTORY_SEPARATOR.'current'.\DIRECTORY_SEPARATOR.'current.png');
+            self::assertSame('IMG', file_get_contents($downloaded.\DIRECTORY_SEPARATOR.'images'.\DIRECTORY_SEPARATOR.'current'.\DIRECTORY_SEPARATOR.'current.png'));
+
+            $skipTester = $this->tester($skipClient, $projectDir);
+            $exit = $skipTester->execute($this->fastOptions('tz-skip'));
+
+            self::assertSame(Command::SUCCESS, $exit);
+            self::assertStringContainsString('images=0', $skipTester->getDisplay());
+            $skipped = $projectDir.\DIRECTORY_SEPARATOR.'tz-skip'.\DIRECTORY_SEPARATOR.'stamps'.\DIRECTORY_SEPARATOR.'3535';
+            self::assertFileExists($skipped.\DIRECTORY_SEPARATOR.'stamp.json');
+            self::assertFileDoesNotExist($skipped.\DIRECTORY_SEPARATOR.'images'.\DIRECTORY_SEPARATOR.'current'.\DIRECTORY_SEPARATOR.'current.png');
+        } finally {
+            $this->removeTree($projectDir);
+        }
+    }
+
+    public function testTimeoutBelowOneSecondIsSentAsOneSecond(): void
+    {
+        $listHtml = file_get_contents(__DIR__.'/../fixtures/stamp_web/items_list.html');
+        $lazyJson = file_get_contents(__DIR__.'/../fixtures/stamp_web/lazy_page1.json');
+        $seenTimeout = null;
+        $seenMaxDuration = null;
+        $client = new MockHttpClient(function (string $method, string $url, array $options) use ($listHtml, $lazyJson, &$seenTimeout, &$seenMaxDuration): MockResponse {
+            if (null === $seenTimeout) {
+                $seenTimeout = $options['timeout'] ?? null;
+                $seenMaxDuration = $options['max_duration'] ?? null;
+            }
+            if (str_contains($url, '/items/lazy')) {
+                return new MockResponse($lazyJson, ['response_headers' => ['content-type' => 'application/json']]);
+            }
+            if (1 === preg_match('#/items/\d+$#', $url)) {
+                self::fail('A zero limit must not fetch stamp details: '.$url);
+            }
+            if (str_contains($url, '/items?') || str_ends_with($url, '/items')) {
+                return new MockResponse($listHtml, ['response_headers' => ['content-type' => 'text/html']]);
+            }
+
+            self::fail('Unexpected URL: '.$url);
+        });
+
+        $projectDir = $this->projectDir();
+
+        try {
+            $tester = $this->tester($client, $projectDir);
+            $exit = $tester->execute([
+                ...$this->fastOptions('tz-web'),
+                '--limit' => '0',
+                '--timeout' => '0',
+            ]);
+
+            self::assertSame(Command::SUCCESS, $exit);
+            self::assertSame(1.0, $seenTimeout);
+            self::assertSame(1.0, $seenMaxDuration);
+        } finally {
+            $this->removeTree($projectDir);
+        }
+    }
+
+    public function testRejectsNonNumericTimeoutBeforeScraping(): void
+    {
+        $requests = 0;
+        $client = new MockHttpClient(function () use (&$requests): MockResponse {
+            ++$requests;
+
+            return new MockResponse('unused');
+        });
+
+        $tester = $this->tester($client, sys_get_temp_dir());
+
+        try {
+            $tester->execute([
+                '--timeout' => 'fast',
+                '--output' => 'tz-web',
+            ]);
+            self::fail('A non-numeric --timeout must abort the command.');
+        } catch (\InvalidArgumentException $e) {
+            self::assertSame('--timeout must be numeric', $e->getMessage());
+        }
+
+        self::assertSame(0, $requests);
+    }
+
     private function tester(MockHttpClient $client, string $projectDir): CommandTester
     {
         $command = new ScrapeWebStampsCommand(new StampWebScrapeService($client), $projectDir);

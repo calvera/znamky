@@ -37,6 +37,24 @@ final class GoogleGeocoderTest extends TestCase
         self::assertSame(['lat' => 50.0831, 'lng' => 17.2308], $result);
     }
 
+    public function testIntegerCoordinatesAreReturnedAsFloats(): void
+    {
+        $client = new MockHttpClient([
+            new MockResponse(json_encode([
+                'status' => 'OK',
+                'results' => [
+                    ['geometry' => ['location' => ['lat' => 50, 'lng' => 17]]],
+                ],
+            ], \JSON_THROW_ON_ERROR)),
+        ]);
+
+        $result = (new GoogleGeocoder($client, 'test-key'))->geocode('Praděd');
+
+        self::assertNotNull($result);
+        self::assertSame(50.0, $result['lat']);
+        self::assertSame(17.0, $result['lng']);
+    }
+
     public function testGeocodeZeroResultsReturnsNull(): void
     {
         $client = new MockHttpClient([
