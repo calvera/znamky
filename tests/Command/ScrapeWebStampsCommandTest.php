@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace App\Tests\Command;
 
 use App\Command\ScrapeWebStampsCommand;
+use App\Service\Stamp\InertiaPageParser;
+use App\Service\Stamp\StampWebClient;
 use App\Service\Stamp\StampWebScrapeService;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Tester\CommandTester;
@@ -210,7 +213,10 @@ final class ScrapeWebStampsCommandTest extends TestCase
 
     private function tester(MockHttpClient $client, string $projectDir): CommandTester
     {
-        $command = new ScrapeWebStampsCommand(new StampWebScrapeService($client), $projectDir);
+        $command = new ScrapeWebStampsCommand(
+            new StampWebScrapeService(new StampWebClient($client, new MockClock()), new InertiaPageParser(), new MockClock()),
+            $projectDir,
+        );
 
         return new CommandTester($command);
     }
