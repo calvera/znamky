@@ -6,8 +6,8 @@ namespace App\ApiResource;
 
 use ApiPlatform\Metadata\ApiProperty;
 use ApiPlatform\Metadata\ApiResource;
-use ApiPlatform\Metadata\GraphQl\Mutation;
 use ApiPlatform\Metadata\GraphQl\Query;
+use App\GraphQl\Auth\AuthMutation;
 use App\GraphQl\Resolver\Auth\ForgotPasswordMutationResolver;
 use App\GraphQl\Resolver\Auth\LoginMutationResolver;
 use App\GraphQl\Resolver\Auth\LogoutMutationResolver;
@@ -27,101 +27,60 @@ use Symfony\Component\Serializer\Attribute\Groups;
             security: 'false',
             securityMessage: 'Not available.',
         ),
-        new Mutation(
+        new AuthMutation(
+            name: 'register',
             resolver: RegisterMutationResolver::class,
             args: [
                 'email' => ['type' => 'String!'],
                 'locale' => ['type' => 'String'],
             ],
-            security: 'true',
-            name: 'register',
-            read: false,
-            deserialize: false,
-            validate: false,
-            write: false,
-            normalizationContext: ['groups' => ['auth:read']],
         ),
-        new Mutation(
+        new AuthMutation(
+            name: 'verifyEmail',
             resolver: VerifyEmailMutationResolver::class,
             args: [
                 'token' => ['type' => 'String!'],
                 'password' => ['type' => 'String!'],
             ],
-            security: 'true',
-            name: 'verifyEmail',
-            read: false,
-            deserialize: false,
-            validate: false,
-            write: false,
-            normalizationContext: ['groups' => ['auth:read']],
         ),
-        new Mutation(
+        new AuthMutation(
+            name: 'login',
             resolver: LoginMutationResolver::class,
             args: [
                 'email' => ['type' => 'String!'],
                 'password' => ['type' => 'String!'],
             ],
-            security: 'true',
-            name: 'login',
-            read: false,
-            deserialize: false,
-            validate: false,
-            write: false,
-            normalizationContext: ['groups' => ['auth:read']],
         ),
-        new Mutation(
+        new AuthMutation(
+            name: 'refreshToken',
             resolver: RefreshTokenMutationResolver::class,
             args: [
                 'refreshToken' => ['type' => 'String!'],
             ],
-            security: 'true',
-            name: 'refreshToken',
-            read: false,
-            deserialize: false,
-            validate: false,
-            write: false,
-            normalizationContext: ['groups' => ['auth:read']],
         ),
-        new Mutation(
+        new AuthMutation(
+            name: 'forgotPassword',
             resolver: ForgotPasswordMutationResolver::class,
             args: [
                 'email' => ['type' => 'String!'],
                 'locale' => ['type' => 'String'],
             ],
-            security: 'true',
-            name: 'forgotPassword',
-            read: false,
-            deserialize: false,
-            validate: false,
-            write: false,
-            normalizationContext: ['groups' => ['auth:read']],
         ),
-        new Mutation(
+        new AuthMutation(
+            name: 'resetPassword',
             resolver: ResetPasswordMutationResolver::class,
             args: [
                 'token' => ['type' => 'String!'],
                 'password' => ['type' => 'String!'],
             ],
-            security: 'true',
-            name: 'resetPassword',
-            read: false,
-            deserialize: false,
-            validate: false,
-            write: false,
-            normalizationContext: ['groups' => ['auth:read']],
         ),
-        new Mutation(
+        new AuthMutation(
+            name: 'logout',
             resolver: LogoutMutationResolver::class,
             args: [
                 'refreshToken' => ['type' => 'String'],
             ],
             security: 'is_granted("IS_AUTHENTICATED_FULLY")',
-            name: 'logout',
-            read: false,
-            deserialize: false,
-            validate: false,
-            write: false,
-            normalizationContext: ['groups' => ['auth:read']],
         ),
         new Query(
             resolver: MeQueryResolver::class,
