@@ -8,6 +8,7 @@ use App\Entity\RefreshToken;
 use App\Entity\User;
 use App\Repository\UserRepository;
 use App\Service\Auth\AuthMailer;
+use App\Service\Auth\EmailTokenLookup;
 use App\Service\Auth\PasswordResetService;
 use App\Service\Auth\TokenHasher;
 use Doctrine\ORM\EntityManagerInterface;
@@ -88,6 +89,7 @@ final class AuthTest extends WebTestCase
             static::getContainer()->get(UserRepository::class),
             static::getContainer()->get(EntityManagerInterface::class),
             static::getContainer()->get(TokenHasher::class),
+            static::getContainer()->get(EmailTokenLookup::class),
             new AuthMailer(new class implements MailerInterface {
                 public function send(RawMessage $message, ?Envelope $envelope = null): void
                 {
@@ -1001,6 +1003,7 @@ final class AuthTest extends WebTestCase
             'password' => 'password123',
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
+        self::assertStringContainsString('Verification token has expired.', (string) $this->client->getResponse()->getContent());
     }
 
     public function testPasswordResetTokenExpiresByTheApplicationClock(): void
@@ -1018,6 +1021,7 @@ final class AuthTest extends WebTestCase
             'password' => 'newpassword456',
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
+        self::assertStringContainsString('Password reset token has expired.', (string) $this->client->getResponse()->getContent());
 
         $this->login($email, $oldPassword);
     }

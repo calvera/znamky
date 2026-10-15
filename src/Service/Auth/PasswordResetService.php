@@ -8,7 +8,6 @@ use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Gesdinet\JWTRefreshTokenBundle\Model\RevokeRefreshTokenManagerInterface;
 use Symfony\Component\Clock\ClockInterface;
-use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 
 final class PasswordResetService
@@ -17,6 +16,7 @@ final class PasswordResetService
         private readonly UserRepository $userRepository,
         private readonly EntityManagerInterface $entityManager,
         private readonly TokenHasher $tokenHasher,
+        private readonly EmailTokenLookup $emailTokenLookup,
         private readonly AuthMailer $authMailer,
         private readonly UserPasswordHasherInterface $passwordHasher,
         private readonly RevokeRefreshTokenManagerInterface $refreshTokenManager,
@@ -45,18 +45,7 @@ final class PasswordResetService
 
     public function reset(string $rawToken, string $plainPassword): void
     {
-        $user = $this->userRepository->findOneByPasswordResetTokenHash(
-            $this->tokenHasher->hash($rawToken)
-        );
-
-        if (null === $user) {
-            throw new UnprocessableEntityHttpException('Invalid password reset token.');
-        }
-
-        $expiresAt = $user->getPasswordResetTokenExpiresAt();
-        if (null === $expiresAt || $expiresAt < $this->clock->now()) {
-            throw new UnprocessableEntityHttpException('Password reset token has expired.');
-        }
+        $user = $this->emailTokenLookup->findPasswordResetUser($rawToken);
 
         $user->setPassword($this->passwordHasher->hashPassword($user, $plainPassword));
         $user->setPasswordResetToken(null);

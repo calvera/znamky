@@ -5,34 +5,20 @@ declare(strict_types=1);
 namespace App\Service\Auth;
 
 use App\Repository\UserRepository;
-use Symfony\Component\Clock\ClockInterface;
-use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 
 final class EmailVerificationService
 {
     public function __construct(
         private readonly UserRepository $userRepository,
-        private readonly TokenHasher $tokenHasher,
+        private readonly EmailTokenLookup $emailTokenLookup,
         private readonly UserPasswordHasherInterface $passwordHasher,
-        private readonly ClockInterface $clock,
     ) {
     }
 
     public function verify(string $rawToken, string $plainPassword): void
     {
-        $user = $this->userRepository->findOneByEmailVerificationTokenHash(
-            $this->tokenHasher->hash($rawToken)
-        );
-
-        if (null === $user) {
-            throw new UnprocessableEntityHttpException('Invalid verification token.');
-        }
-
-        $expiresAt = $user->getEmailVerificationTokenExpiresAt();
-        if (null === $expiresAt || $expiresAt < $this->clock->now()) {
-            throw new UnprocessableEntityHttpException('Verification token has expired.');
-        }
+        $user = $this->emailTokenLookup->findVerificationUser($rawToken);
 
         $user->setPassword($this->passwordHasher->hashPassword($user, $plainPassword));
         $user->setIsVerified(true);
