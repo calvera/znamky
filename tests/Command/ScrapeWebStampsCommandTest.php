@@ -43,7 +43,7 @@ final class ScrapeWebStampsCommandTest extends TestCase
             ]);
             self::fail('A non-integer --country must abort the command.');
         } catch (\InvalidArgumentException $e) {
-            self::assertSame('--country must be an integer', $e->getMessage());
+            self::assertSame('The value "cz" is not valid for the "country" option. Expected a value of type "int".', $e->getMessage());
         }
 
         self::assertSame(0, $requests);
@@ -67,7 +67,7 @@ final class ScrapeWebStampsCommandTest extends TestCase
             ]);
             self::fail('A non-integer --type must abort the command.');
         } catch (\InvalidArgumentException $e) {
-            self::assertSame('--type must be an integer', $e->getMessage());
+            self::assertSame('The value "annual" is not valid for the "type" option. Expected a value of type "int".', $e->getMessage());
         }
 
         self::assertSame(0, $requests);
@@ -132,7 +132,7 @@ final class ScrapeWebStampsCommandTest extends TestCase
             ]);
             self::fail('A non-integer --limit must abort the command.');
         } catch (\InvalidArgumentException $e) {
-            self::assertSame('--limit must be an integer', $e->getMessage());
+            self::assertSame('The value "abc" is not valid for the "limit" option. Expected a value of type "int".', $e->getMessage());
         }
 
         self::assertSame(0, $requests);

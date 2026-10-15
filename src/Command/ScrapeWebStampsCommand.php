@@ -7,10 +7,9 @@ namespace App\Command;
 use App\Service\Stamp\StampWebScrapeOptions;
 use App\Service\Stamp\StampWebScrapeService;
 use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Attribute\Option;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Helper\ProgressBar;
-use Symfony\Component\Console\Input\InputInterface;
-use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -22,94 +21,64 @@ use function Safe\ini_set;
     name: 'app:stamps:scrape-web',
     description: 'Scrape turisticke-znamky.cz stamps to JSON + images under data/tz-web/',
 )]
-final class ScrapeWebStampsCommand extends Command
+final class ScrapeWebStampsCommand
 {
     public function __construct(
         private readonly StampWebScrapeService $stampWebScrapeService,
         #[Autowire('%kernel.project_dir%')]
         private readonly string $projectDir,
     ) {
-        parent::__construct();
     }
 
-    protected function configure(): void
-    {
-        $this
-            ->addOption('output', null, InputOption::VALUE_REQUIRED, 'Output directory', 'data/tz-web')
-            ->addOption('country', null, InputOption::VALUE_REQUIRED, 'Only this country id (site id)')
-            ->addOption('type', null, InputOption::VALUE_REQUIRED, 'Only this type id (site id)')
-            ->addOption('limit', null, InputOption::VALUE_REQUIRED, 'Max stamps to scrape (after discovery)')
-            ->addOption('force', null, InputOption::VALUE_NONE, 'Re-download existing stamp.json / images')
-            ->addOption('skip-images', null, InputOption::VALUE_NONE, 'Skip image downloads')
-            ->addOption('delay-detail', null, InputOption::VALUE_REQUIRED, 'Pause after each detail fetch (ms)', '800')
-            ->addOption('delay-list', null, InputOption::VALUE_REQUIRED, 'Pause after each list page (ms)', '400')
-            ->addOption('delay-image', null, InputOption::VALUE_REQUIRED, 'Pause after each image download (ms)', '150')
-            ->addOption('timeout', null, InputOption::VALUE_REQUIRED, 'HTTP timeout per request (seconds)', '30')
-            ->addOption('retries', null, InputOption::VALUE_REQUIRED, 'Retries for timeouts / 5xx / transport errors', '3')
-            ->addOption('rate-limit-retries', null, InputOption::VALUE_REQUIRED, 'Retries for HTTP 429/503', '5');
-    }
-
-    protected function execute(InputInterface $input, OutputInterface $output): int
-    {
+    public function __invoke(
+        SymfonyStyle $io,
+        OutputInterface $output,
+        #[Option('Output directory', name: 'output')]
+        string $outputDir = 'data/tz-web',
+        #[Option('Only this country id (site id)')]
+        ?int $country = null,
+        #[Option('Only this type id (site id)')]
+        ?int $type = null,
+        #[Option('Max stamps to scrape (after discovery)')]
+        ?int $limit = null,
+        #[Option('Re-download existing stamp.json / images')]
+        bool $force = false,
+        #[Option('Skip image downloads')]
+        bool $skipImages = false,
+        #[Option('Pause after each detail fetch (ms)')]
+        int $delayDetail = 800,
+        #[Option('Pause after each list page (ms)')]
+        int $delayList = 400,
+        #[Option('Pause after each image download (ms)')]
+        int $delayImage = 150,
+        #[Option('HTTP timeout per request (seconds)')]
+        float $timeout = 30.0,
+        #[Option('Retries for timeouts / 5xx / transport errors')]
+        int $retries = 3,
+        #[Option('Retries for HTTP 429/503')]
+        int $rateLimitRetries = 5,
+    ): int {
         if (\function_exists('ini_set')) {
             ini_set('memory_limit', '512M');
         }
 
-        $io = new SymfonyStyle($input, $output);
-
-        $outputOption = Assert::string($input->getOption('output'), '--output must be a string');
-        $outputDir = str_starts_with($outputOption, '/')
-            ? $outputOption
-            : $this->projectDir.\DIRECTORY_SEPARATOR.$outputOption;
-
-        $countryOption = $input->getOption('country');
-        $typeOption = $input->getOption('type');
-        $limitOption = $input->getOption('limit');
-
-        $countryId = null;
-        if (null !== $countryOption && '' !== $countryOption) {
-            Assert::integerish($countryOption, '--country must be an integer');
-            $countryId = (int) $countryOption;
+        if (!str_starts_with($outputDir, '/')) {
+            $outputDir = $this->projectDir.\DIRECTORY_SEPARATOR.$outputDir;
         }
-
-        $typeId = null;
-        if (null !== $typeOption && '' !== $typeOption) {
-            Assert::integerish($typeOption, '--type must be an integer');
-            $typeId = (int) $typeOption;
-        }
-
-        $limit = null;
-        if (null !== $limitOption && '' !== $limitOption) {
-            Assert::integerish($limitOption, '--limit must be an integer');
-            $limit = max(0, (int) $limitOption);
-        }
-
-        $delayDetail = $input->getOption('delay-detail');
-        $delayList = $input->getOption('delay-list');
-        $delayImage = $input->getOption('delay-image');
-        $timeoutOption = $input->getOption('timeout');
-        $retriesOption = $input->getOption('retries');
-        $rateLimitRetriesOption = $input->getOption('rate-limit-retries');
-        Assert::integerish($delayDetail, '--delay-detail must be an integer');
-        Assert::integerish($delayList, '--delay-list must be an integer');
-        Assert::integerish($delayImage, '--delay-image must be an integer');
-        Assert::numeric($timeoutOption, '--timeout must be numeric');
-        Assert::integerish($retriesOption, '--retries must be an integer');
-        Assert::integerish($rateLimitRetriesOption, '--rate-limit-retries must be an integer');
 
         $options = new StampWebScrapeOptions(
             outputDir: $outputDir,
-            delayDetailMs: max(0, (int) $delayDetail),
-            delayListMs: max(0, (int) $delayList),
-            delayImageMs: max(0, (int) $delayImage),
-            countryId: $countryId,
-            typeId: $typeId,
-            limit: $limit,
-            force: true === $input->getOption('force'),
-            skipImages: true === $input->getOption('skip-images'),
-            timeoutSec: max(1.0, (float) $timeoutOption),
-            retries: max(0, (int) $retriesOption),
-            rateLimitRetries: max(0, (int) $rateLimitRetriesOption),
+            delayDetailMs: max(0, $delayDetail),
+            delayListMs: max(0, $delayList),
+            delayImageMs: max(0, $delayImage),
+            countryId: $country,
+            typeId: $type,
+            limit: null === $limit ? null : max(0, $limit),
+            force: $force,
+            skipImages: $skipImages,
+            timeoutSec: max(1.0, $timeout),
+            retries: max(0, $retries),
+            rateLimitRetries: max(0, $rateLimitRetries),
         );
 
         $io->title('Scraping turisticke-znamky.cz');

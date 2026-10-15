@@ -223,7 +223,7 @@ final class StampCatalogCommandTest extends KernelTestCase
                 ]);
                 self::fail('A non-integer --delay must abort the command.');
             } catch (\InvalidArgumentException $e) {
-                self::assertSame('--delay must be an integer', $e->getMessage());
+                self::assertSame('The value "fast" is not valid for the "delay" option. Expected a value of type "int".', $e->getMessage());
                 self::assertStringNotContainsString('already running', $tester->getDisplay());
             }
         } finally {
