@@ -8,7 +8,7 @@ use App\Dto\Auth\RegisterRequest;
 use App\Entity\User;
 use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
-use Safe\DateTimeImmutable;
+use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Validator\Exception\ValidationFailedException;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
@@ -20,6 +20,7 @@ final class UserRegistrationService
         private readonly TokenHasher $tokenHasher,
         private readonly AuthMailer $authMailer,
         private readonly ValidatorInterface $validator,
+        private readonly ClockInterface $clock,
     ) {
     }
 
@@ -40,7 +41,7 @@ final class UserRegistrationService
 
         $rawToken = $this->tokenHasher->generate();
         $user->setEmailVerificationToken($this->tokenHasher->hash($rawToken));
-        $user->setEmailVerificationTokenExpiresAt(new DateTimeImmutable('+1 day'));
+        $user->setEmailVerificationTokenExpiresAt($this->clock->now()->modify('+1 day'));
         $user->setIsVerified(false);
 
         // The raw token exists only in the email. Commit the account only after
@@ -58,7 +59,7 @@ final class UserRegistrationService
     {
         $rawToken = $this->tokenHasher->generate();
         $user->setEmailVerificationToken($this->tokenHasher->hash($rawToken));
-        $user->setEmailVerificationTokenExpiresAt(new DateTimeImmutable('+1 day'));
+        $user->setEmailVerificationTokenExpiresAt($this->clock->now()->modify('+1 day'));
 
         $this->entityManager->wrapInTransaction(function () use ($user, $rawToken, $locale): void {
             $this->userRepository->save($user);

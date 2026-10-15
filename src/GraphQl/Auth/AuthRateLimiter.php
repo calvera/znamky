@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\GraphQl\Auth;
 
+use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\Response;
@@ -18,6 +19,7 @@ final class AuthRateLimiter
         private readonly RateLimiterFactoryInterface $authEmailLimiter,
         #[Autowire(service: 'limiter.auth_token')]
         private readonly RateLimiterFactoryInterface $authTokenLimiter,
+        private readonly ClockInterface $clock,
     ) {
     }
 
@@ -41,7 +43,7 @@ final class AuthRateLimiter
             return;
         }
 
-        $retryAfter = max(1, $limit->getRetryAfter()->getTimestamp() - time());
+        $retryAfter = max(1, $limit->getRetryAfter()->getTimestamp() - $this->clock->now()->getTimestamp());
         throw new TooManyRequestsHttpException($retryAfter, Response::$statusTexts[Response::HTTP_TOO_MANY_REQUESTS] ?? 'Too Many Requests');
     }
 }

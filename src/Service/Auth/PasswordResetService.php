@@ -7,7 +7,7 @@ namespace App\Service\Auth;
 use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Gesdinet\JWTRefreshTokenBundle\Model\RevokeRefreshTokenManagerInterface;
-use Safe\DateTimeImmutable;
+use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 
@@ -20,6 +20,7 @@ final class PasswordResetService
         private readonly AuthMailer $authMailer,
         private readonly UserPasswordHasherInterface $passwordHasher,
         private readonly RevokeRefreshTokenManagerInterface $refreshTokenManager,
+        private readonly ClockInterface $clock,
     ) {
     }
 
@@ -32,7 +33,7 @@ final class PasswordResetService
 
         $rawToken = $this->tokenHasher->generate();
         $user->setPasswordResetToken($this->tokenHasher->hash($rawToken));
-        $user->setPasswordResetTokenExpiresAt(new DateTimeImmutable('+1 hour'));
+        $user->setPasswordResetTokenExpiresAt($this->clock->now()->modify('+1 hour'));
 
         // Replacing the stored token before the email is accepted burns the
         // previous link when SMTP fails. Roll that replacement back with the send.
@@ -53,7 +54,7 @@ final class PasswordResetService
         }
 
         $expiresAt = $user->getPasswordResetTokenExpiresAt();
-        if (null === $expiresAt || $expiresAt < new DateTimeImmutable()) {
+        if (null === $expiresAt || $expiresAt < $this->clock->now()) {
             throw new UnprocessableEntityHttpException('Password reset token has expired.');
         }
 

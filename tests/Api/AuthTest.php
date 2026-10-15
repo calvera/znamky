@@ -17,6 +17,8 @@ use Safe\DateTimeImmutable;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\MailerAssertionsTrait;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+use Symfony\Component\Clock\Clock;
+use Symfony\Component\Clock\Test\ClockSensitiveTrait;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Mailer\Envelope;
 use Symfony\Component\Mailer\Exception\TransportException;
@@ -28,6 +30,7 @@ use Symfony\Contracts\Translation\TranslatorInterface;
 
 final class AuthTest extends WebTestCase
 {
+    use ClockSensitiveTrait;
     use EmailTokenTestTrait;
     use JsonResponseTestTrait;
     use MailerAssertionsTrait;
@@ -93,6 +96,7 @@ final class AuthTest extends WebTestCase
             }, static::getContainer()->get(TranslatorInterface::class), 'noreply@znamky.local'),
             static::getContainer()->get(UserPasswordHasherInterface::class),
             static::getContainer()->get(RevokeRefreshTokenManagerInterface::class),
+            new Clock(),
         );
 
         try {
@@ -981,6 +985,39 @@ final class AuthTest extends WebTestCase
             'password' => $newPassword,
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+
+        $this->login($email, $oldPassword);
+    }
+
+    public function testVerificationTokenExpiresByTheApplicationClock(): void
+    {
+        $email = 'clock-verify@example.com';
+        $this->jsonRequest('POST', '/api/register', ['email' => $email]);
+        self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
+
+        self::mockTime('+25 hours');
+        $this->jsonRequest('POST', '/api/verify-email', [
+            'token' => $this->extractTokenFromLastEmail(),
+            'password' => 'password123',
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
+    }
+
+    public function testPasswordResetTokenExpiresByTheApplicationClock(): void
+    {
+        $email = 'clock-reset@example.com';
+        $oldPassword = 'password123';
+        $this->registerAndVerify($email, $oldPassword);
+
+        $this->jsonRequest('POST', '/api/forgot-password', ['email' => $email]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+
+        self::mockTime('+61 minutes');
+        $this->jsonRequest('POST', '/api/reset-password', [
+            'token' => $this->extractTokenFromLastEmail(),
+            'password' => 'newpassword456',
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
 
         $this->login($email, $oldPassword);
     }
