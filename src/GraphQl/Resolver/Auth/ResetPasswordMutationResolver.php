@@ -24,12 +24,7 @@ final class ResetPasswordMutationResolver implements MutationResolverInterface
     {
         $this->rateLimiter->consumeToken();
 
-        $input = $this->inputValidator->input($context);
-        $request = new ResetPasswordRequest(
-            $this->inputValidator->string($input, 'token'),
-            $this->inputValidator->string($input, 'password'),
-        );
-        $this->inputValidator->validate($request);
+        $request = $this->inputValidator->dto($context, ResetPasswordRequest::class);
 
         $this->passwordResetService->reset($request->token, $request->password);
 
