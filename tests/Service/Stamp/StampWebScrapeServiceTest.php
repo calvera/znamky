@@ -753,6 +753,113 @@ final class StampWebScrapeServiceTest extends TestCase
         self::assertFileExists($outputDir.'/stamps/10/stamp.json');
     }
 
+    public function testCountryFilterDoesNotDiscoverOtherCountries(): void
+    {
+        $listHtml = str_replace(
+            '&quot;countries&quot;: [{&quot;id&quot;: 1, &quot;name&quot;: &quot;Czech Republic&quot;, &quot;short&quot;: &quot;CZ&quot;}]',
+            '&quot;countries&quot;: [{&quot;id&quot;: 1, &quot;name&quot;: &quot;Czech Republic&quot;, &quot;short&quot;: &quot;CZ&quot;},{&quot;id&quot;: 2, &quot;name&quot;: &quot;Slovakia&quot;, &quot;short&quot;: &quot;SK&quot;}]',
+            file_get_contents(__DIR__.'/../../fixtures/stamp_web/items_list.html'),
+        );
+        $detailHtml = file_get_contents(__DIR__.'/../../fixtures/stamp_web/item_detail.html');
+        $lazyJson = json_encode([
+            'items' => [
+                ['id' => 10, 'no' => 1, 'name' => 'A'],
+            ],
+            'totalRecords' => 1,
+            'itemsPerPage' => 100,
+            'currentPage' => 1,
+        ], \JSON_THROW_ON_ERROR);
+
+        $countries = [];
+        $client = new MockHttpClient(function (string $method, string $url) use ($listHtml, $detailHtml, $lazyJson, &$countries): MockResponse {
+            if (str_contains($url, '/items/lazy')) {
+                $query = parse_url($url, \PHP_URL_QUERY);
+                self::assertIsString($query);
+                parse_str($query, $params);
+                $country = $params['country'] ?? null;
+                self::assertIsScalar($country);
+                $countries[] = (string) $country;
+                if ('1' !== (string) $country) {
+                    self::fail('Country filter must not request country '.$country);
+                }
+
+                return new MockResponse($lazyJson, ['response_headers' => ['content-type' => 'application/json']]);
+            }
+            if (1 === preg_match('#/items/(\d+)$#', $url)) {
+                return new MockResponse($detailHtml, ['response_headers' => ['content-type' => 'text/html']]);
+            }
+            if (str_contains($url, '/storage/item_images/')) {
+                self::fail('skipImages must not download images: '.$url);
+            }
+            if (str_contains($url, '/items?') || str_ends_with($url, '/items')) {
+                return new MockResponse($listHtml, ['response_headers' => ['content-type' => 'text/html']]);
+            }
+
+            self::fail('Unexpected URL: '.$url);
+        });
+
+        $outputDir = sys_get_temp_dir().'/znamky-scrape-'.bin2hex(random_bytes(4));
+        $stats = (new StampWebScrapeService($client))->scrape($this->quietOptions($outputDir, skipImages: true));
+
+        self::assertSame(['1'], $countries);
+        self::assertSame(1, $stats['discovered']);
+        self::assertSame(1, $stats['scraped']);
+        self::assertSame(0, $stats['failed']);
+        self::assertFileExists($outputDir.'/stamps/10/stamp.json');
+    }
+
+    public function testNonIntegerArchiveFlagFailsTheStampAndDoesNotStopTheNext(): void
+    {
+        $listHtml = file_get_contents(__DIR__.'/../../fixtures/stamp_web/items_list.html');
+        $badDetail = str_replace(
+            '&quot;archive&quot;: 0',
+            '&quot;archive&quot;: &quot;no&quot;',
+            file_get_contents(__DIR__.'/../../fixtures/stamp_web/item_detail.html'),
+        );
+        $goodDetail = file_get_contents(__DIR__.'/../../fixtures/stamp_web/item_detail.html');
+        $lazyJson = json_encode([
+            'items' => [
+                ['id' => 3535, 'no' => 1, 'name' => 'Bad'],
+                ['id' => 3536, 'no' => 2, 'name' => 'Good'],
+            ],
+            'totalRecords' => 2,
+            'itemsPerPage' => 100,
+            'currentPage' => 1,
+        ], \JSON_THROW_ON_ERROR);
+
+        $client = new MockHttpClient(function (string $method, string $url) use ($listHtml, $badDetail, $goodDetail, $lazyJson): MockResponse {
+            if (str_contains($url, '/items/lazy')) {
+                return new MockResponse($lazyJson, ['response_headers' => ['content-type' => 'application/json']]);
+            }
+            if (str_contains($url, '/items/3535')) {
+                return new MockResponse($badDetail, ['response_headers' => ['content-type' => 'text/html']]);
+            }
+            if (str_contains($url, '/items/3536')) {
+                return new MockResponse($goodDetail, ['response_headers' => ['content-type' => 'text/html']]);
+            }
+            if (str_contains($url, '/storage/item_images/medium/')) {
+                return new MockResponse('IMG', ['response_headers' => ['content-type' => 'image/png']]);
+            }
+            if (str_contains($url, '/items?') || str_ends_with($url, '/items')) {
+                return new MockResponse($listHtml, ['response_headers' => ['content-type' => 'text/html']]);
+            }
+
+            self::fail('Unexpected URL: '.$url);
+        });
+
+        $outputDir = sys_get_temp_dir().'/znamky-scrape-'.bin2hex(random_bytes(4));
+        $stats = (new StampWebScrapeService($client))->scrape($this->quietOptions($outputDir));
+
+        self::assertSame(2, $stats['discovered']);
+        self::assertSame(1, $stats['failed']);
+        self::assertSame(1, $stats['scraped']);
+        self::assertSame(2, $stats['images']);
+        self::assertFileDoesNotExist($outputDir.'/stamps/3535/stamp.json');
+        self::assertFileExists($outputDir.'/stamps/3536/stamp.json');
+        self::assertFileExists($outputDir.'/stamps/3536/images/current/current.png');
+        self::assertFileExists($outputDir.'/stamps/3536/images/archive/archive.png');
+    }
+
     public function testUnmatchedCountryFilterAbortsBeforeDiscovery(): void
     {
         $listHtml = file_get_contents(__DIR__.'/../../fixtures/stamp_web/items_list.html');

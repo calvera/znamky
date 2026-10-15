@@ -731,6 +731,22 @@ final class AuthGraphQlTest extends WebTestCase
         $this->assertGraphQlError($blockedAgain, Response::HTTP_UNAUTHORIZED, 'Too many failed login attempts');
     }
 
+    public function testShortGraphQlPasswordDoesNotSpendTheLoginLimit(): void
+    {
+        $email = 'graphql-short-login@example.com';
+        $password = 'password123';
+        $this->registerVerifyAndLogin($email, $password);
+
+        for ($attempt = 1; $attempt <= 5; ++$attempt) {
+            $failed = $this->loginMutation($email, 'short');
+            $this->assertGraphQlError($failed, Response::HTTP_UNPROCESSABLE_ENTITY, 'too short');
+        }
+
+        $success = $this->loginMutation($email, $password);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $success);
+    }
+
     public function testEmailAndTokenRateLimitsAreIndependent(): void
     {
         for ($i = 1; $i <= 4; ++$i) {
@@ -1008,6 +1024,43 @@ final class AuthGraphQlTest extends WebTestCase
 
         $again = $this->refreshMutation($rotated['refreshToken']);
         $this->assertGraphQlError($again, Response::HTTP_UNAUTHORIZED, 'Invalid refresh token.');
+    }
+
+    public function testExpiredRefreshTokenLeavesTheAccessTokenAndOtherSession(): void
+    {
+        $email = 'graphql-expired-refresh@example.com';
+        $password = 'password123';
+        $expired = $this->registerVerifyAndLogin($email, $password);
+        $other = $this->tokensFromLogin($this->loginMutation($email, $password));
+
+        $this->expireRefreshToken($expired['refreshToken']);
+
+        $refresh = $this->refreshMutation($expired['refreshToken']);
+        $this->assertGraphQlError($refresh, Response::HTTP_UNAUTHORIZED, 'Invalid refresh token.');
+
+        $ownMe = $this->graphql(<<<'GRAPHQL'
+            query {
+              meUser {
+                email
+              }
+            }
+            GRAPHQL, $expired['token']);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $ownMe);
+
+        $otherMe = $this->graphql(<<<'GRAPHQL'
+            query {
+              meUser {
+                email
+              }
+            }
+            GRAPHQL, $other['token']);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $otherMe);
+
+        $otherRefresh = $this->refreshMutation($other['refreshToken']);
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $otherRefresh);
     }
 
     public function testRefreshKeepsTheTtlWhenTheFamilyDeadlineIsLater(): void
@@ -1331,6 +1384,18 @@ final class AuthGraphQlTest extends WebTestCase
         $em = static::getContainer()->get('doctrine')->getManager();
 
         return $em;
+    }
+
+    private function expireRefreshToken(string $cleartext): void
+    {
+        $em = $this->entityManager();
+        $em->clear();
+        $token = $em->getRepository(RefreshToken::class)->findOneBy([
+            'refreshToken' => 'sha256$'.hash('sha256', $cleartext),
+        ]);
+        self::assertInstanceOf(RefreshToken::class, $token);
+        $token->setValid(new DateTime('-1 minute'));
+        $em->flush();
     }
 
     private function refreshTokenEntity(string $email): RefreshToken

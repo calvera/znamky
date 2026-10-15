@@ -1666,6 +1666,66 @@ final class AuthTest extends WebTestCase
         self::assertResponseIsSuccessful();
     }
 
+    public function testExpiredRefreshTokenLeavesTheAccessTokenAndOtherSession(): void
+    {
+        $email = 'expired-refresh@example.com';
+        $password = 'password123';
+        $this->registerAndVerify($email, $password);
+        $expired = $this->login($email, $password);
+        $other = $this->login($email, $password);
+
+        $this->expireRefreshToken($expired['refresh_token']);
+
+        $this->jsonRequest('POST', '/api/token/refresh', [
+            'refresh_token' => $expired['refresh_token'],
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+
+        $this->client->request('GET', '/api/me', server: [
+            'HTTP_AUTHORIZATION' => 'Bearer '.$expired['token'],
+        ]);
+        self::assertResponseIsSuccessful();
+
+        $this->client->request('GET', '/api/me', server: [
+            'HTTP_AUTHORIZATION' => 'Bearer '.$other['token'],
+        ]);
+        self::assertResponseIsSuccessful();
+
+        $this->jsonRequest('POST', '/api/token/refresh', [
+            'refresh_token' => $other['refresh_token'],
+        ]);
+        self::assertResponseIsSuccessful();
+    }
+
+    public function testOversizedLogoutRefreshTokenDoesNotRevokeTheSession(): void
+    {
+        $email = 'logout-long-token@example.com';
+        $password = 'password123';
+        $this->registerAndVerify($email, $password);
+        $tokens = $this->login($email, $password);
+
+        $this->client->request(
+            'POST',
+            '/api/logout',
+            server: [
+                'HTTP_AUTHORIZATION' => 'Bearer '.$tokens['token'],
+                'CONTENT_TYPE' => 'application/json',
+            ],
+            content: json_encode(['refresh_token' => str_repeat('a', 4097)], \JSON_THROW_ON_ERROR),
+        );
+        self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
+
+        $this->client->request('GET', '/api/me', server: [
+            'HTTP_AUTHORIZATION' => 'Bearer '.$tokens['token'],
+        ]);
+        self::assertResponseIsSuccessful();
+
+        $this->jsonRequest('POST', '/api/token/refresh', [
+            'refresh_token' => $tokens['refresh_token'],
+        ]);
+        self::assertResponseIsSuccessful();
+    }
+
     private function installThrowingMailer(): void
     {
         static::getContainer()->set(MailerInterface::class, new class implements MailerInterface {
@@ -1743,6 +1803,18 @@ final class AuthTest extends WebTestCase
         self::assertInstanceOf(RefreshToken::class, $token);
 
         return $token;
+    }
+
+    private function expireRefreshToken(string $cleartext): void
+    {
+        $em = $this->entityManager();
+        $em->clear();
+        $token = $em->getRepository(RefreshToken::class)->findOneBy([
+            'refreshToken' => 'sha256$'.hash('sha256', $cleartext),
+        ]);
+        self::assertInstanceOf(RefreshToken::class, $token);
+        $token->setValid(new DateTime('-1 minute'));
+        $em->flush();
     }
 
     private function storedRefreshTokenFor(string $email): string

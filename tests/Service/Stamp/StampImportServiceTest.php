@@ -389,6 +389,28 @@ CSV);
         self::assertCount(0, $stamp->getPlaces());
     }
 
+    public function testSameIdentityAfterTheImportBatchFlushUpdatesTheExistingStamp(): void
+    {
+        $lines = ['"Číslo";"Název"'];
+        $lines[] = '"1";"Původní"';
+        for ($number = 2; $number <= 100; ++$number) {
+            $lines[] = sprintf('"%d";"Známka %d"', $number, $number);
+        }
+        $lines[] = '"1";"Opravená"';
+        $this->writeCsv('cs-stamps.csv', implode("\n", $lines)."\n");
+
+        $this->importService->import($this->fixtureDir);
+
+        self::assertSame(100, $this->stampRepository->count([]));
+        $stamp = $this->stampRepository->findOneByIdentity(StampCountry::Cz, StampType::Regular, 1);
+        self::assertInstanceOf(Stamp::class, $stamp);
+        self::assertSame('Opravená', $stamp->getName());
+        self::assertInstanceOf(
+            Stamp::class,
+            $this->stampRepository->findOneByIdentity(StampCountry::Cz, StampType::Regular, 100),
+        );
+    }
+
     public function testReimportReplacesTagsAndPlaces(): void
     {
         $this->importService->import($this->fixtureDir);
