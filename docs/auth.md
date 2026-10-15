@@ -199,7 +199,13 @@ Other cases:
 - Bad credentials / unverified account / expired JWT or refresh: **401**
 - Duplicate **verified** registration email: **422** (same `ValidationFailed`
   shape when thrown from the validator); unverified emails reclaim via register
-- Invalid/expired verify or reset token: **422**
+- Invalid/expired verify or reset token: **422** `application/problem+json`
+  (`{"title": "An error occurred", "detail": "Verification token has expired.", "status": 422, ...}`)
+
+Every other `/api` error is rendered by API Platform as `application/problem+json`
+(`title`, `detail`, `status`, `type`) regardless of the `Accept` header
+(`handle_symfony_errors: true`, `jsonproblem` first in `error_formats`;
+`Accept: application/ld+json` gets the Hydra variant).
 - Rate limit exceeded on public auth endpoints: **429** (`Retry-After` header)
 
 Password minimum length is **8** characters.

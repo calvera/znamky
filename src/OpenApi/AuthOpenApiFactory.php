@@ -120,9 +120,7 @@ final class AuthOpenApiFactory implements OpenApiFactoryInterface
             tags: ['Authentication'],
             responses: [
                 (string) HttpResponse::HTTP_NO_CONTENT => new Response(description: 'Email verified and password set'),
-                (string) HttpResponse::HTTP_UNPROCESSABLE_ENTITY => $this->validationFailedResponse(
-                    'Invalid payload, or invalid/expired token',
-                ),
+                (string) HttpResponse::HTTP_UNPROCESSABLE_ENTITY => $this->invalidPayloadOrTokenResponse(),
                 (string) HttpResponse::HTTP_TOO_MANY_REQUESTS => $this->tooManyRequestsResponse(),
             ],
             summary: 'Verify email address',
@@ -191,9 +189,7 @@ final class AuthOpenApiFactory implements OpenApiFactoryInterface
             tags: ['Authentication'],
             responses: [
                 (string) HttpResponse::HTTP_NO_CONTENT => new Response(description: 'Password updated'),
-                (string) HttpResponse::HTTP_UNPROCESSABLE_ENTITY => $this->validationFailedResponse(
-                    'Invalid payload, or invalid/expired token',
-                ),
+                (string) HttpResponse::HTTP_UNPROCESSABLE_ENTITY => $this->invalidPayloadOrTokenResponse(),
                 (string) HttpResponse::HTTP_TOO_MANY_REQUESTS => $this->tooManyRequestsResponse(),
             ],
             summary: 'Reset password with email token',
@@ -281,6 +277,24 @@ final class AuthOpenApiFactory implements OpenApiFactoryInterface
             content: new \ArrayObject([
                 'application/json' => new MediaType(schema: new \ArrayObject([
                     '$ref' => '#/components/schemas/ValidationFailed',
+                ])),
+            ]),
+        );
+    }
+
+    /**
+     * 422 as ValidationFailed (bad payload) or problem+json Error (invalid/expired token).
+     */
+    private function invalidPayloadOrTokenResponse(): Response
+    {
+        return new Response(
+            description: 'Invalid payload (application/json ValidationFailed), or invalid/expired token (application/problem+json Error)',
+            content: new \ArrayObject([
+                'application/json' => new MediaType(schema: new \ArrayObject([
+                    '$ref' => '#/components/schemas/ValidationFailed',
+                ])),
+                'application/problem+json' => new MediaType(schema: new \ArrayObject([
+                    '$ref' => '#/components/schemas/Error',
                 ])),
             ]),
         );

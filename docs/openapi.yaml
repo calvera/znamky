@@ -249,11 +249,16 @@
                         "description": "Password updated"
                     },
                     "422": {
-                        "description": "Invalid payload, or invalid/expired token",
+                        "description": "Invalid payload (application/json ValidationFailed), or invalid/expired token (application/problem+json Error)",
                         "content": {
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ValidationFailed"
+                                }
+                            },
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
                                 }
                             }
                         }
@@ -302,11 +307,16 @@
                         "description": "Email verified and password set"
                     },
                     "422": {
-                        "description": "Invalid payload, or invalid/expired token",
+                        "description": "Invalid payload (application/json ValidationFailed), or invalid/expired token (application/problem+json Error)",
                         "content": {
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ValidationFailed"
+                                }
+                            },
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
                                 }
                             }
                         }
