@@ -51,8 +51,7 @@ final class StampImportService
             $this->purgeCatalog();
         }
 
-        $this->tagCache = [];
-        $this->placeCache = [];
+        $this->resetCaches();
 
         $files = [
             'cs-stamps.csv' => [StampCountry::Cz, StampType::Regular],
@@ -73,10 +72,7 @@ final class StampImportService
             ++$filesImported;
         }
 
-        $this->entityManager->flush();
-        $this->entityManager->clear();
-        $this->tagCache = [];
-        $this->placeCache = [];
+        $this->flushAndClear();
 
         return [
             'stamps' => $stampCount,
@@ -95,6 +91,21 @@ final class StampImportService
         $connection = $this->entityManager->getConnection();
         $connection->executeStatement('TRUNCATE TABLE stamp_stamp_tag, stamp_stamp_place, stamps, stamp_tags, stamp_places RESTART IDENTITY CASCADE');
         $this->entityManager->clear();
+        $this->resetCaches();
+    }
+
+    /**
+     * Writes pending changes and detaches all entities, dropping cached tags and places with them.
+     */
+    private function flushAndClear(): void
+    {
+        $this->entityManager->flush();
+        $this->entityManager->clear();
+        $this->resetCaches();
+    }
+
+    private function resetCaches(): void
+    {
         $this->tagCache = [];
         $this->placeCache = [];
     }
@@ -125,10 +136,7 @@ final class StampImportService
                 ++$count;
 
                 if (0 === $count % self::BATCH_SIZE) {
-                    $this->entityManager->flush();
-                    $this->entityManager->clear();
-                    $this->tagCache = [];
-                    $this->placeCache = [];
+                    $this->flushAndClear();
                 }
             }
 
