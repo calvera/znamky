@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Service\Stamp;
 
+use App\Entity\Geocodable;
 use App\Entity\Stamp;
 use App\Entity\StampPlace;
 use App\Repository\StampPlaceRepository;
@@ -66,7 +67,7 @@ final class StampGeocodeService
     /**
      * Geocodes each row, flushing and clearing the entity manager every BATCH_SIZE successes.
      *
-     * @template T of Stamp|StampPlace
+     * @template T of Geocodable
      *
      * @param iterable<T>                               $rows
      * @param \Closure(T): string                       $queryOf

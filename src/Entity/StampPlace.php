@@ -41,8 +41,10 @@ use Symfony\Component\Validator\Constraints as Assert;
     ],
     normalizationContext: ['groups' => ['stamp_place:read']],
 )]
-class StampPlace
+class StampPlace implements Geocodable
 {
+    use HasCoordinates;
+
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
@@ -67,12 +69,6 @@ class StampPlace
     #[ORM\Column(length: 64)]
     #[ApiProperty(readable: false, writable: false)]
     private string $catalogKey = '';
-
-    #[ORM\Column(type: Types::DECIMAL, precision: 10, scale: 7, nullable: true)]
-    private ?string $latitude = null;
-
-    #[ORM\Column(type: Types::DECIMAL, precision: 10, scale: 7, nullable: true)]
-    private ?string $longitude = null;
 
     public function getId(): ?int
     {
@@ -118,31 +114,5 @@ class StampPlace
     private function refreshCatalogKey(): void
     {
         $this->catalogKey = self::buildCatalogKey($this->name, '' === $this->url ? null : $this->url);
-    }
-
-    #[Groups(['stamp_place:read', 'stamp:read'])]
-    public function getLatitude(): ?float
-    {
-        return null === $this->latitude ? null : (float) $this->latitude;
-    }
-
-    public function setLatitude(?float $latitude): static
-    {
-        $this->latitude = null === $latitude ? null : \sprintf('%.7F', $latitude);
-
-        return $this;
-    }
-
-    #[Groups(['stamp_place:read', 'stamp:read'])]
-    public function getLongitude(): ?float
-    {
-        return null === $this->longitude ? null : (float) $this->longitude;
-    }
-
-    public function setLongitude(?float $longitude): static
-    {
-        $this->longitude = null === $longitude ? null : \sprintf('%.7F', $longitude);
-
-        return $this;
     }
 }
