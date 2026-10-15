@@ -1002,8 +1002,7 @@ final class AuthTest extends WebTestCase
             'token' => $this->extractTokenFromLastEmail(),
             'password' => 'password123',
         ]);
-        self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
-        self::assertStringContainsString('Verification token has expired.', (string) $this->client->getResponse()->getContent());
+        $this->assertJsonError(Response::HTTP_UNPROCESSABLE_ENTITY, 'Verification token has expired.');
     }
 
     public function testPasswordResetTokenExpiresByTheApplicationClock(): void
@@ -1020,10 +1019,58 @@ final class AuthTest extends WebTestCase
             'token' => $this->extractTokenFromLastEmail(),
             'password' => 'newpassword456',
         ]);
-        self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
-        self::assertStringContainsString('Password reset token has expired.', (string) $this->client->getResponse()->getContent());
+        $this->assertJsonError(Response::HTTP_UNPROCESSABLE_ENTITY, 'Password reset token has expired.');
 
         $this->login($email, $oldPassword);
+    }
+
+    public function testInvalidVerificationTokenReturnsJsonError(): void
+    {
+        $this->jsonRequest('POST', '/api/verify-email', [
+            'token' => 'invalid-token',
+            'password' => 'password123',
+        ]);
+        $this->assertJsonError(Response::HTTP_UNPROCESSABLE_ENTITY, 'Invalid verification token.');
+    }
+
+    public function testExpiredVerificationTokenReturnsJsonError(): void
+    {
+        $email = 'json-expired-verify@example.com';
+        $this->jsonRequest('POST', '/api/register', ['email' => $email]);
+        self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
+        $token = $this->extractTokenFromLastEmail();
+        $this->expireUserToken($email, 'emailVerificationTokenExpiresAt');
+
+        $this->jsonRequest('POST', '/api/verify-email', [
+            'token' => $token,
+            'password' => 'password123',
+        ]);
+        $this->assertJsonError(Response::HTTP_UNPROCESSABLE_ENTITY, 'Verification token has expired.');
+    }
+
+    public function testInvalidPasswordResetTokenReturnsJsonError(): void
+    {
+        $this->jsonRequest('POST', '/api/reset-password', [
+            'token' => 'invalid-token',
+            'password' => 'newpassword456',
+        ]);
+        $this->assertJsonError(Response::HTTP_UNPROCESSABLE_ENTITY, 'Invalid password reset token.');
+    }
+
+    public function testExpiredPasswordResetTokenReturnsJsonError(): void
+    {
+        $email = 'json-expired-reset@example.com';
+        $this->registerAndVerify($email, 'password123');
+        $this->jsonRequest('POST', '/api/forgot-password', ['email' => $email]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+        $token = $this->extractTokenFromLastEmail();
+        $this->expireUserToken($email, 'passwordResetTokenExpiresAt');
+
+        $this->jsonRequest('POST', '/api/reset-password', [
+            'token' => $token,
+            'password' => 'newpassword456',
+        ]);
+        $this->assertJsonError(Response::HTTP_UNPROCESSABLE_ENTITY, 'Password reset token has expired.');
     }
 
     public function testExpiredPasswordResetDoesNotRevokeOutstandingAccessTokens(): void
@@ -1749,6 +1796,16 @@ final class AuthTest extends WebTestCase
         }
 
         return ['token' => $token, 'refresh_token' => $refreshToken];
+    }
+
+    private function assertJsonError(int $status, string $detail): void
+    {
+        self::assertResponseStatusCodeSame($status);
+        self::assertResponseHeaderSame('content-type', 'application/problem+json');
+        $body = $this->jsonResponse();
+        self::assertSame($status, $body['status'] ?? null);
+        self::assertSame($detail, $body['detail'] ?? null);
+        self::assertArrayHasKey('title', $body);
     }
 
     private function registerAndVerify(string $email, string $password): void

@@ -82,6 +82,7 @@ The same flows are available as GraphQL mutations/queries on `POST /api/graphql`
 `forgotPasswordUser`, `resetPasswordUser`, `logoutUser`, `meUser`).
 
 DTO validation failures return **422** with `{ title, detail, violations[] }`.
+Other API errors are `application/problem+json` (`title`, `detail`, `status`).
 See [docs/auth.md](docs/auth.md).
 
 ## Stamp catalog
