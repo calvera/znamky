@@ -56,19 +56,26 @@ final class AuthTokenService
         );
 
         $request->attributes->set(SecurityRequestAttributes::LAST_USERNAME, $email);
-        $limit = $this->loginRateLimiter->consume($request);
-        if (!$limit->isAccepted()) {
+        // Peek, same as the REST login firewall: a successful login must not spend
+        // the shared IP budget. consume() counts against that budget, and reset()
+        // only clears the username+IP limiter.
+        $limit = $this->loginRateLimiter->peek($request);
+        if (!$limit->isAccepted() || 0 === $limit->getRemainingTokens()) {
             throw new UnauthorizedHttpException('Bearer', 'Too many failed login attempts, please try again later.');
         }
 
         $user = $this->userRepository->findOneByEmail($email);
         if (null === $user || !$this->passwordHasher->isPasswordValid($user, $password)) {
+            $this->loginRateLimiter->consume($request);
+
             throw new UnauthorizedHttpException('Bearer', 'Invalid credentials.');
         }
 
         try {
             $this->userChecker->checkPreAuth($user);
         } catch (\Symfony\Component\Security\Core\Exception\AccountStatusException $e) {
+            $this->loginRateLimiter->consume($request);
+
             throw new UnauthorizedHttpException('Bearer', $e->getMessage(), $e);
         }
 

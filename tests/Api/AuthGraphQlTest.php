@@ -731,6 +731,23 @@ final class AuthGraphQlTest extends WebTestCase
         $this->assertGraphQlError($blockedAgain, Response::HTTP_UNAUTHORIZED, 'Too many failed login attempts');
     }
 
+    public function testSuccessfulGraphQlLoginsDoNotExhaustTheIpLimit(): void
+    {
+        $password = 'password123';
+        $this->registerVerifyAndLogin('graphql-ip-budget@example.com', $password);
+
+        // Test env allows 20 login attempts per IP. Successes must not spend that
+        // budget, or one client logging in repeatedly locks out every account.
+        for ($attempt = 1; $attempt <= 20; ++$attempt) {
+            $login = $this->loginMutation('graphql-ip-budget@example.com', $password);
+            self::assertResponseIsSuccessful();
+            self::assertArrayNotHasKey('errors', $login, sprintf('successful login %d should not be throttled', $attempt));
+        }
+
+        $other = $this->registerVerifyAndLogin('graphql-ip-budget-other@example.com', $password);
+        self::assertNotSame('', $other['token']);
+    }
+
     public function testEmailAndTokenRateLimitsAreIndependent(): void
     {
         for ($i = 1; $i <= 4; ++$i) {
