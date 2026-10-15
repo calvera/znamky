@@ -104,6 +104,8 @@ final class ScrapeWebStampsCommandTest extends TestCase
             $resolved = $projectDir.\DIRECTORY_SEPARATOR.'tz-web';
             self::assertStringContainsString($resolved, $display);
             self::assertStringContainsString('Discovering catalog (1 countries, 1 types)...', $display);
+            self::assertStringContainsString('bucket country=1 type=0', $display);
+            self::assertStringContainsString('Discovered 1 stamp ids.', $display);
             self::assertStringContainsString('failed id=3535', $display);
             self::assertStringContainsString('discovered=1 scraped=0 skipped=0 failed=1 images=0', $display);
             self::assertStringContainsString('Some stamps failed', $display);

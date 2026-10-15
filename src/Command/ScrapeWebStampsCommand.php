@@ -9,11 +9,9 @@ use App\Service\Stamp\StampWebScrapeService;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\Option;
 use Symfony\Component\Console\Command\Command;
-use Symfony\Component\Console\Helper\ProgressBar;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
-use Webmozart\Assert\Assert;
 
 use function Safe\ini_set;
 
@@ -84,58 +82,9 @@ final class ScrapeWebStampsCommand
         $io->title('Scraping turisticke-znamky.cz');
         $io->writeln(sprintf('Output: <info>%s</info>', $outputDir));
 
-        $progress = null;
-        $onEvent = function (string $event, array $payload) use ($io, $output, &$progress): void {
-            if ('filters' === $event) {
-                $countries = \is_array($payload['countries'] ?? null) ? $payload['countries'] : [];
-                $types = \is_array($payload['types'] ?? null) ? $payload['types'] : [];
-                $io->writeln(sprintf('Discovering catalog (%d countries, %d types)...', \count($countries), \count($types)));
-
-                return;
-            }
-
-            if ('discovered' === $event) {
-                $countRaw = $payload['count'] ?? 0;
-                Assert::integerish($countRaw);
-                $count = (int) $countRaw;
-                $io->writeln(sprintf('Discovered <info>%d</info> stamp ids.', $count));
-                if ($count > 0) {
-                    $progress = new ProgressBar($output, $count);
-                    $progress->start();
-                }
-
-                return;
-            }
-
-            if (\in_array($event, ['scraped', 'skip', 'failed'], true) && null !== $progress) {
-                $progress->advance();
-            }
-
-            if ('failed' === $event) {
-                $id = $payload['id'] ?? '?';
-                $error = $payload['error'] ?? 'unknown';
-                $io->writeln(sprintf(
-                    '  <error>failed</error> id=%s: %s',
-                    $this->stringifyPayloadValue($id, '?'),
-                    $this->stringifyPayloadValue($error, 'unknown'),
-                ), OutputInterface::VERBOSITY_VERBOSE);
-            }
-
-            if ('bucket' === $event && $output->isVerbose()) {
-                $io->writeln(sprintf(
-                    '  bucket country=%s type=%s',
-                    $this->stringifyPayloadValue($payload['countryId'] ?? '?', '?'),
-                    $this->stringifyPayloadValue($payload['typeId'] ?? '?', '?'),
-                ));
-            }
-        };
-
-        $stats = $this->stampWebScrapeService->scrape($options, $onEvent);
-
-        if (null !== $progress) {
-            $progress->finish();
-            $io->newLine(2);
-        }
+        $listener = new ConsoleStampWebScrapeListener($io, $output);
+        $stats = $this->stampWebScrapeService->scrape($options, $listener);
+        $listener->finish();
 
         $io->writeln(sprintf(
             'Done: discovered=%d scraped=%d skipped=%d failed=%d images=%d',
@@ -155,17 +104,5 @@ final class ScrapeWebStampsCommand
         $io->success('Web scrape finished.');
 
         return Command::SUCCESS;
-    }
-
-    private function stringifyPayloadValue(mixed $value, string $fallback): string
-    {
-        if (null === $value) {
-            return $fallback;
-        }
-        if (\is_scalar($value)) {
-            return (string) $value;
-        }
-
-        return $fallback;
     }
 }

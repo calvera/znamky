@@ -25,24 +25,24 @@ final class StampWebScrapeService
     }
 
     /**
-     * @param (callable(string, array<string, mixed>): void)|null $onEvent
-     *
      * @return array{discovered: int, scraped: int, skipped: int, failed: int, images: int}
      */
-    public function scrape(StampWebScrapeOptions $options, ?callable $onEvent = null): array
-    {
+    public function scrape(
+        StampWebScrapeOptions $options,
+        StampWebScrapeListener $listener = new NullStampWebScrapeListener(),
+    ): array {
         $output = new StampWebScrapeOutput($options->outputDir);
 
         $filters = $this->resolveFilters($options);
-        $this->emit($onEvent, 'filters', $filters);
+        $listener->filtersResolved(\count($filters['countries']), \count($filters['types']));
 
-        $ids = $this->discoverIds($filters['countries'], $filters['types'], $options, $onEvent);
+        $ids = $this->discoverIds($filters['countries'], $filters['types'], $options, $listener);
 
         if (null !== $options->limit && $options->limit >= 0) {
             $ids = \array_slice($ids, 0, $options->limit);
         }
 
-        $this->emit($onEvent, 'discovered', ['count' => \count($ids)]);
+        $listener->stampsDiscovered(\count($ids));
 
         $stats = [
             'discovered' => \count($ids),
@@ -76,7 +76,7 @@ final class StampWebScrapeService
         foreach ($ids as $id) {
             if (!$options->force && $output->hasStamp($id)) {
                 ++$stats['skipped'];
-                $this->emit($onEvent, 'skip', ['id' => $id]);
+                $listener->stampSkipped($id);
                 continue;
             }
 
@@ -84,10 +84,10 @@ final class StampWebScrapeService
                 $images = $this->scrapeOne($id, $output, $options);
                 ++$stats['scraped'];
                 $stats['images'] += $images;
-                $this->emit($onEvent, 'scraped', ['id' => $id, 'images' => $images]);
+                $listener->stampScraped($id, $images);
             } catch (\Throwable $e) {
                 ++$stats['failed'];
-                $this->emit($onEvent, 'failed', ['id' => $id, 'error' => $e->getMessage()]);
+                $listener->stampFailed($id, $e->getMessage());
             }
 
             ++$detailCount;
@@ -244,11 +244,10 @@ final class StampWebScrapeService
     /**
      * @param list<array{id: int, short?: string, name?: string}> $countries
      * @param list<array{id: int, short?: string, name?: string}> $types
-     * @param (callable(string, array<string, mixed>): void)|null $onEvent
      *
      * @return list<int>
      */
-    private function discoverIds(array $countries, array $types, StampWebScrapeOptions $options, ?callable $onEvent): array
+    private function discoverIds(array $countries, array $types, StampWebScrapeOptions $options, StampWebScrapeListener $listener): array
     {
         $ids = [];
         $seen = [];
@@ -261,7 +260,7 @@ final class StampWebScrapeService
                 }
                 $firstBucket = false;
 
-                $this->emit($onEvent, 'bucket', ['countryId' => $country['id'], 'typeId' => $type['id']]);
+                $listener->bucketStarted($country['id'], $type['id']);
                 $page = 1;
                 while (true) {
                     $query = http_build_query([
@@ -324,17 +323,6 @@ final class StampWebScrapeService
     private function now(): string
     {
         return $this->clock->now()->setTimezone(new \DateTimeZone('UTC'))->format(\DateTimeInterface::ATOM);
-    }
-
-    /**
-     * @param (callable(string, array<string, mixed>): void)|null $onEvent
-     * @param array<string, mixed>                                $payload
-     */
-    private function emit(?callable $onEvent, string $event, array $payload): void
-    {
-        if (null !== $onEvent) {
-            $onEvent($event, $payload);
-        }
     }
 
     private function requireInt(mixed $value, string $message): int
