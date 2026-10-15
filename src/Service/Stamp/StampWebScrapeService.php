@@ -7,19 +7,17 @@ namespace App\Service\Stamp;
 use Symfony\Component\Clock\ClockInterface;
 use Webmozart\Assert\Assert;
 
-use function Safe\json_decode;
-
 /**
  * Downloads stamp catalog pages from turisticke-znamky.cz into per-stamp JSON + images.
  */
 final class StampWebScrapeService
 {
-    private const int LAZY_ROWS = 100;
     private const string IMAGE_URL = StampWebClient::BASE_URL.'/storage/item_images/medium/';
 
     public function __construct(
         private readonly StampWebClient $client,
         private readonly InertiaPageParser $parser,
+        private readonly StampCatalogDiscovery $discovery,
         private readonly ClockInterface $clock,
     ) {
     }
@@ -33,10 +31,10 @@ final class StampWebScrapeService
     ): array {
         $output = new StampWebScrapeOutput($options->outputDir);
 
-        $filters = $this->resolveFilters($options);
+        $filters = $this->discovery->resolveFilters($options);
         $listener->filtersResolved(\count($filters['countries']), \count($filters['types']));
 
-        $ids = $this->discoverIds($filters['countries'], $filters['types'], $options, $listener);
+        $ids = $this->discovery->discoverIds($filters['countries'], $filters['types'], $options, $listener);
 
         if (null !== $options->limit && $options->limit >= 0) {
             $ids = \array_slice($ids, 0, $options->limit);
@@ -91,10 +89,10 @@ final class StampWebScrapeService
             }
 
             ++$detailCount;
-            $this->pause($options->delayDetailMs);
+            $this->client->pause($options->delayDetailMs);
 
             if ($options->batchPauseEvery > 0 && 0 === $detailCount % $options->batchPauseEvery) {
-                $this->pause($options->batchPauseMs);
+                $this->client->pause($options->batchPauseMs);
             }
         }
 
@@ -170,7 +168,7 @@ final class StampWebScrapeService
 
             if ($options->force || !$output->hasStampFile($id, $relative)) {
                 $output->writeStampFile($id, $relative, $this->client->get(self::IMAGE_URL.rawurlencode($safeName), $options));
-                $this->pause($options->delayImageMs);
+                $this->client->pause($options->delayImageMs);
             }
 
             $imageFiles[] = [
@@ -182,142 +180,6 @@ final class StampWebScrapeService
         }
 
         return $imageFiles;
-    }
-
-    /**
-     * @return array{
-     *     countries: non-empty-list<array{id: int, short?: string, name?: string}>,
-     *     types: non-empty-list<array{id: int, short?: string, name?: string}>
-     * }
-     */
-    private function resolveFilters(StampWebScrapeOptions $options): array
-    {
-        $page = $this->parser->parsePage($this->client->get(StampWebClient::BASE_URL.'/items?country=1&type=0&page=1&rows=5', $options));
-        $this->pause($options->delayListMs);
-
-        $referenceData = $page['props']['referenceData'] ?? null;
-        $filtersData = $page['props']['filtersData'] ?? null;
-        Assert::isArray($referenceData, 'Missing referenceData.');
-        Assert::isArray($filtersData, 'Missing filtersData.');
-
-        $countriesRaw = $referenceData['countries'] ?? null;
-        $typesRaw = $filtersData['types'] ?? null;
-        Assert::isArray($countriesRaw, 'Missing referenceData.countries.');
-        Assert::isArray($typesRaw, 'Missing filtersData.types.');
-
-        $countries = $this->filterEntries($countriesRaw, $options->countryId, 'Country id must be integerish.');
-        $types = $this->filterEntries($typesRaw, $options->typeId, 'Type id must be integerish.');
-
-        Assert::notEmpty($countries, 'No countries matched the scrape filters.');
-        Assert::notEmpty($types, 'No types matched the scrape filters.');
-
-        return ['countries' => $countries, 'types' => $types];
-    }
-
-    /**
-     * @param array<mixed> $raw
-     *
-     * @return list<array{id: int, short?: string, name?: string}>
-     */
-    private function filterEntries(array $raw, ?int $onlyId, string $idMessage): array
-    {
-        $entries = [];
-        foreach ($raw as $row) {
-            Assert::isArray($row);
-            $id = $this->requireInt($row['id'] ?? null, $idMessage);
-            if (null !== $onlyId && $id !== $onlyId) {
-                continue;
-            }
-            $entry = ['id' => $id];
-            if (isset($row['short']) && \is_string($row['short'])) {
-                $entry['short'] = $row['short'];
-            }
-            if (isset($row['name']) && \is_string($row['name'])) {
-                $entry['name'] = $row['name'];
-            }
-            $entries[] = $entry;
-        }
-
-        return $entries;
-    }
-
-    /**
-     * @param list<array{id: int, short?: string, name?: string}> $countries
-     * @param list<array{id: int, short?: string, name?: string}> $types
-     *
-     * @return list<int>
-     */
-    private function discoverIds(array $countries, array $types, StampWebScrapeOptions $options, StampWebScrapeListener $listener): array
-    {
-        $ids = [];
-        $seen = [];
-        $firstBucket = true;
-
-        foreach ($countries as $country) {
-            foreach ($types as $type) {
-                if (!$firstBucket) {
-                    $this->pause($options->bucketPauseMs);
-                }
-                $firstBucket = false;
-
-                $listener->bucketStarted($country['id'], $type['id']);
-                $page = 1;
-                while (true) {
-                    $query = http_build_query([
-                        'country' => $country['id'],
-                        'type' => $type['id'],
-                        'sorting' => 'number',
-                        'page' => $page,
-                        'rows' => self::LAZY_ROWS,
-                    ]);
-                    $payload = json_decode($this->client->get(StampWebClient::BASE_URL.'/items/lazy?'.$query, $options), true);
-                    $this->pause($options->delayListMs);
-
-                    Assert::isArray($payload, 'Lazy listing response must be JSON object.');
-                    $items = $payload['items'] ?? [];
-                    Assert::isArray($items);
-
-                    if ([] === $items) {
-                        break;
-                    }
-
-                    foreach ($items as $item) {
-                        Assert::isArray($item);
-                        $id = $this->requireInt($item['id'] ?? null, 'Lazy item id must be integerish.');
-                        if (isset($seen[$id])) {
-                            continue;
-                        }
-                        $seen[$id] = true;
-                        $ids[] = $id;
-                    }
-
-                    $total = $this->requireInt($payload['totalRecords'] ?? 0, 'totalRecords must be integerish.');
-                    $perPage = $this->requireInt($payload['itemsPerPage'] ?? self::LAZY_ROWS, 'itemsPerPage must be integerish.');
-                    if ($perPage <= 0 || $page * $perPage >= $total) {
-                        break;
-                    }
-                    ++$page;
-                }
-            }
-        }
-
-        return $ids;
-    }
-
-    /**
-     * Sleeps for $baseMs ±20% jitter; no-op for non-positive values.
-     */
-    private function pause(int $baseMs): void
-    {
-        if ($baseMs <= 0) {
-            return;
-        }
-
-        $jitter = (int) round($baseMs * 0.2);
-        $ms = $baseMs + ($jitter > 0 ? random_int(-$jitter, $jitter) : 0);
-        if ($ms > 0) {
-            $this->clock->sleep($ms / 1000);
-        }
     }
 
     private function now(): string

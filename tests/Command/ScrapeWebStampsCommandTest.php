@@ -6,6 +6,7 @@ namespace App\Tests\Command;
 
 use App\Command\ScrapeWebStampsCommand;
 use App\Service\Stamp\InertiaPageParser;
+use App\Service\Stamp\StampCatalogDiscovery;
 use App\Service\Stamp\StampWebClient;
 use App\Service\Stamp\StampWebScrapeService;
 use PHPUnit\Framework\TestCase;
@@ -215,8 +216,11 @@ final class ScrapeWebStampsCommandTest extends TestCase
 
     private function tester(MockHttpClient $client, string $projectDir): CommandTester
     {
+        $clock = new MockClock();
+        $webClient = new StampWebClient($client, $clock);
+        $parser = new InertiaPageParser();
         $command = new ScrapeWebStampsCommand(
-            new StampWebScrapeService(new StampWebClient($client, new MockClock()), new InertiaPageParser(), new MockClock()),
+            new StampWebScrapeService($webClient, $parser, new StampCatalogDiscovery($webClient, $parser), $clock),
             $projectDir,
         );
 

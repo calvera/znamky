@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tests\Service\Stamp;
 
 use App\Service\Stamp\InertiaPageParser;
+use App\Service\Stamp\StampCatalogDiscovery;
 use App\Service\Stamp\StampWebClient;
 use App\Service\Stamp\StampWebScrapeOptions;
 use App\Service\Stamp\StampWebScrapeService;
@@ -998,7 +999,10 @@ final class StampWebScrapeServiceTest extends TestCase
     {
         $clock = new MockClock();
 
-        return new StampWebScrapeService(new StampWebClient($client, $clock), new InertiaPageParser(), $clock);
+        $webClient = new StampWebClient($client, $clock);
+        $parser = new InertiaPageParser();
+
+        return new StampWebScrapeService($webClient, $parser, new StampCatalogDiscovery($webClient, $parser), $clock);
     }
 
     private function lazyPageNumber(string $url): int

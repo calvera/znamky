@@ -119,6 +119,29 @@ final class StampWebClientTest extends TestCase
         self::assertContains('User-Agent: Mozilla/5.0 (compatible; ZnamkyScraper/1.0; +https://github.com/calvera/znamky)', $headers);
     }
 
+    public function testPauseSleepsWithinTwentyPercentJitter(): void
+    {
+        $clock = new MockClock('2026-01-01 00:00:00');
+        $start = $clock->now();
+
+        (new StampWebClient(new MockHttpClient(), $clock))->pause(1000);
+
+        $waited = (float) $clock->now()->format('U.u') - (float) $start->format('U.u');
+        self::assertGreaterThanOrEqual(0.8, $waited);
+        self::assertLessThanOrEqual(1.2, $waited);
+    }
+
+    public function testPauseIgnoresNonPositiveDelay(): void
+    {
+        $clock = new MockClock('2026-01-01 00:00:00');
+        $client = new StampWebClient(new MockHttpClient(), $clock);
+
+        $client->pause(0);
+        $client->pause(-5);
+
+        self::assertSame('2026-01-01 00:00:00.000000', $clock->now()->format('Y-m-d H:i:s.u'));
+    }
+
     private function options(int $retries = 3): StampWebScrapeOptions
     {
         return new StampWebScrapeOptions(outputDir: '/unused', retries: $retries);

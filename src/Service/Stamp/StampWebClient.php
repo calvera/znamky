@@ -79,6 +79,22 @@ final class StampWebClient
         }
     }
 
+    /**
+     * Sleeps for $baseMs ±20% jitter; no-op for non-positive values.
+     */
+    public function pause(int $baseMs): void
+    {
+        if ($baseMs <= 0) {
+            return;
+        }
+
+        $jitter = (int) round($baseMs * 0.2);
+        $ms = $baseMs + ($jitter > 0 ? random_int(-$jitter, $jitter) : 0);
+        if ($ms > 0) {
+            $this->clock->sleep($ms / 1000);
+        }
+    }
+
     private function rateLimitBackoffSeconds(ResponseInterface $response, int $attempt): int
     {
         $retryAfter = $response->getHeaders(false)['retry-after'][0] ?? null;
