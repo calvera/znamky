@@ -14,6 +14,13 @@ api_platform:
         JWT-protected stamp catalog queries), IDE at `/api/graphql/graphiql`.
 
         Human docs: `docs/auth.md` (auth), `docs/stamps.md` (stamp catalog).
+    # Render every error (incl. plain Symfony controllers under /api) via API Platform.
+    handle_symfony_errors: true
+    # First entry is the fallback when the Accept header matches none (e.g. absent, */*, text/html).
+    error_formats:
+        jsonproblem: ['application/problem+json']
+        jsonld: ['application/ld+json']
+        json: ['application/problem+json', 'application/json']
     defaults:
         stateless: true
         strict_query_parameter_validation: true
