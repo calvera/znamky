@@ -5,24 +5,37 @@ declare(strict_types=1);
 namespace App\GraphQl\Auth;
 
 use ApiPlatform\Validator\Exception\ValidationException;
+use Symfony\Component\Serializer\Normalizer\DenormalizerInterface;
 use Symfony\Component\Validator\Exception\ValidationFailedException;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
+use Webmozart\Assert\Assert;
 
 final class AuthInputValidator
 {
     public function __construct(
         private readonly ValidatorInterface $validator,
+        private readonly DenormalizerInterface $denormalizer,
     ) {
     }
 
-    public function validate(object $dto): void
+    /**
+     * Denormalizes the mutation `input` into a request DTO and validates it.
+     * Null arguments are dropped so the DTO defaults apply.
+     *
+     * @template T of object
+     *
+     * @param array<string, mixed> $context
+     * @param class-string<T>      $class
+     *
+     * @return T
+     */
+    public function dto(array $context, string $class): object
     {
-        $violations = $this->validator->validate($dto);
-        if (0 === \count($violations)) {
-            return;
-        }
+        $input = array_filter($this->input($context), static fn (mixed $value): bool => null !== $value);
+        $dto = Assert::isInstanceOf($this->denormalizer->denormalize($input, $class), $class);
+        $this->validate($dto);
 
-        throw new ValidationException($violations);
+        return $dto;
     }
 
     /**
@@ -60,13 +73,13 @@ final class AuthInputValidator
         return $result;
     }
 
-    /**
-     * @param array<string, mixed> $input
-     */
-    public function string(array $input, string $key): string
+    private function validate(object $dto): void
     {
-        $value = $input[$key] ?? '';
+        $violations = $this->validator->validate($dto);
+        if (0 === \count($violations)) {
+            return;
+        }
 
-        return \is_string($value) ? $value : '';
+        throw new ValidationException($violations);
     }
 }

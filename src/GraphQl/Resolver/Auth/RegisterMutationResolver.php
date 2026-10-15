@@ -26,14 +26,7 @@ final class RegisterMutationResolver implements MutationResolverInterface
     {
         $this->rateLimiter->consumeEmail();
 
-        $input = $this->inputValidator->input($context);
-        $request = new RegisterRequest(
-            email: $this->inputValidator->string($input, 'email'),
-            locale: \array_key_exists('locale', $input)
-                ? $this->inputValidator->string($input, 'locale')
-                : 'en',
-        );
-        $this->inputValidator->validate($request);
+        $request = $this->inputValidator->dto($context, RegisterRequest::class);
 
         try {
             $user = $this->registrationService->register($request);

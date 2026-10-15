@@ -60,6 +60,32 @@ final class AuthGraphQlTest extends WebTestCase
         self::assertStringContainsString($this->extractTokenFromLastEmail(), $html);
     }
 
+    public function testRegisterNullLocaleFallsBackToEnglish(): void
+    {
+        $register = $this->graphql(<<<'GRAPHQL'
+            mutation($email: String!, $locale: String) {
+              registerUser(input: { email: $email, locale: $locale }) {
+                user {
+                  email
+                }
+              }
+            }
+            GRAPHQL, variables: [
+            'email' => 'graphql-locale-null@example.com',
+            'locale' => null,
+        ]);
+
+        self::assertResponseIsSuccessful();
+        self::assertArrayNotHasKey('errors', $register);
+        self::assertEmailCount(1);
+
+        $email = self::getMailerMessage();
+        self::assertInstanceOf(Email::class, $email);
+        $html = $email->getHtmlBody();
+        self::assertIsString($html);
+        self::assertStringContainsString('lang="en"', $html);
+    }
+
     public function testRegisterInvalidLocaleDoesNotCreateTheAccount(): void
     {
         $email = 'graphql-locale-bad@example.com';

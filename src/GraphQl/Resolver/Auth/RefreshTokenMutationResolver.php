@@ -20,11 +20,7 @@ final class RefreshTokenMutationResolver implements MutationResolverInterface
 
     public function __invoke(?object $item, array $context): object
     {
-        $input = $this->inputValidator->input($context);
-        $request = new RefreshTokenRequest(
-            $this->inputValidator->string($input, 'refreshToken'),
-        );
-        $this->inputValidator->validate($request);
+        $request = $this->inputValidator->dto($context, RefreshTokenRequest::class);
 
         $tokens = $this->authTokenService->refresh($request->refreshToken);
 

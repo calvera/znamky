@@ -20,12 +20,7 @@ final class LoginMutationResolver implements MutationResolverInterface
 
     public function __invoke(?object $item, array $context): object
     {
-        $input = $this->inputValidator->input($context);
-        $request = new LoginRequest(
-            $this->inputValidator->string($input, 'email'),
-            $this->inputValidator->string($input, 'password'),
-        );
-        $this->inputValidator->validate($request);
+        $request = $this->inputValidator->dto($context, LoginRequest::class);
 
         $tokens = $this->authTokenService->login($request->email, $request->password);
 

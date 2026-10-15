@@ -24,12 +24,7 @@ final class VerifyEmailMutationResolver implements MutationResolverInterface
     {
         $this->rateLimiter->consumeToken();
 
-        $input = $this->inputValidator->input($context);
-        $request = new VerifyEmailRequest(
-            $this->inputValidator->string($input, 'token'),
-            $this->inputValidator->string($input, 'password'),
-        );
-        $this->inputValidator->validate($request);
+        $request = $this->inputValidator->dto($context, VerifyEmailRequest::class);
 
         $this->emailVerificationService->verify($request->token, $request->password);
 
