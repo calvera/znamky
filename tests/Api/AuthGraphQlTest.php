@@ -731,6 +731,53 @@ final class AuthGraphQlTest extends WebTestCase
         $this->assertGraphQlError($blockedAgain, Response::HTTP_UNAUTHORIZED, 'Too many failed login attempts');
     }
 
+    public function testLoginsBlockedByAccountStatusAreThrottled(): void
+    {
+        $email = 'graphql-unverified-throttle@example.com';
+        $password = 'resetpassword1';
+
+        $this->graphql(<<<'GRAPHQL'
+            mutation($email: String!) {
+              registerUser(input: { email: $email }) {
+                user {
+                  email
+                }
+              }
+            }
+            GRAPHQL, variables: ['email' => $email]);
+        self::assertResponseIsSuccessful();
+
+        // A reset stores a password on the still-unverified account, so the UserChecker rejects the login.
+        $this->graphql(<<<'GRAPHQL'
+            mutation($email: String!) {
+              forgotPasswordUser(input: { email: $email }) {
+                user {
+                  success
+                }
+              }
+            }
+            GRAPHQL, variables: ['email' => $email]);
+        self::assertResponseIsSuccessful();
+        $reset = $this->graphql(<<<'GRAPHQL'
+            mutation($token: String!, $password: String!) {
+              resetPasswordUser(input: { token: $token, password: $password }) {
+                user {
+                  success
+                }
+              }
+            }
+            GRAPHQL, variables: ['token' => $this->extractTokenFromLastEmail(), 'password' => $password]);
+        self::assertArrayNotHasKey('errors', $reset);
+
+        for ($attempt = 1; $attempt <= 5; ++$attempt) {
+            $rejected = $this->loginMutation($email, $password);
+            $this->assertGraphQlError($rejected, Response::HTTP_UNAUTHORIZED, 'Please verify your email before logging in.');
+        }
+
+        $blocked = $this->loginMutation($email, $password);
+        $this->assertGraphQlError($blocked, Response::HTTP_UNAUTHORIZED, 'Too many failed login attempts');
+    }
+
     public function testSuccessfulGraphQlLoginsDoNotExhaustTheIpLimit(): void
     {
         $password = 'password123';

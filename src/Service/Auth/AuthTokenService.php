@@ -21,6 +21,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Symfony\Component\HttpKernel\Exception\UnauthorizedHttpException;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
+use Symfony\Component\Security\Core\Exception\AccountStatusException;
 use Symfony\Component\Security\Http\RateLimiter\DefaultLoginRateLimiter;
 use Symfony\Component\Security\Http\SecurityRequestAttributes;
 use Webmozart\Assert\Assert;
@@ -64,19 +65,12 @@ final class AuthTokenService
             throw new UnauthorizedHttpException('Bearer', 'Too many failed login attempts, please try again later.');
         }
 
-        $user = $this->userRepository->findOneByEmail($email);
-        if (null === $user || !$this->passwordHasher->isPasswordValid($user, $password)) {
-            $this->loginRateLimiter->consume($request);
-
-            throw new UnauthorizedHttpException('Bearer', 'Invalid credentials.');
-        }
-
         try {
-            $this->userChecker->checkPreAuth($user);
-        } catch (\Symfony\Component\Security\Core\Exception\AccountStatusException $e) {
+            $user = $this->authenticate($email, $password);
+        } catch (UnauthorizedHttpException $e) {
             $this->loginRateLimiter->consume($request);
 
-            throw new UnauthorizedHttpException('Bearer', $e->getMessage(), $e);
+            throw $e;
         }
 
         $this->loginRateLimiter->reset($request);
@@ -111,11 +105,7 @@ final class AuthTokenService
             throw new UnauthorizedHttpException('Bearer', 'Invalid refresh token.');
         }
 
-        try {
-            $this->userChecker->checkPreAuth($user);
-        } catch (\Symfony\Component\Security\Core\Exception\AccountStatusException $e) {
-            throw new UnauthorizedHttpException('Bearer', $e->getMessage(), $e);
-        }
+        $this->assertCanAuthenticate($user);
 
         $inheritedFamily = null;
         $inheritedFamilyValid = null;
@@ -144,6 +134,30 @@ final class AuthTokenService
 
             return $this->issueTokens($user, $inheritedFamily, $inheritedFamilyValid);
         });
+    }
+
+    private function authenticate(string $email, string $password): User
+    {
+        $user = $this->userRepository->findOneByEmail($email);
+        if (null === $user || !$this->passwordHasher->isPasswordValid($user, $password)) {
+            throw new UnauthorizedHttpException('Bearer', 'Invalid credentials.');
+        }
+
+        $this->assertCanAuthenticate($user);
+
+        return $user;
+    }
+
+    /**
+     * Applies the firewall's UserChecker, reporting a blocked account as 401.
+     */
+    private function assertCanAuthenticate(User $user): void
+    {
+        try {
+            $this->userChecker->checkPreAuth($user);
+        } catch (AccountStatusException $e) {
+            throw new UnauthorizedHttpException('Bearer', $e->getMessage(), $e);
+        }
     }
 
     /**
