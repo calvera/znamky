@@ -109,7 +109,9 @@ HTTP reliability:
 On HTTP 429/503: honor `Retry-After` or exponential backoff from 30 s (cap 5
 min). Existing `stamp.json` is skipped unless `--force` (resume-safe).
 
-Service: `App\Service\Stamp\StampWebScrapeService`.
+Service: `App\Service\Stamp\StampWebScrapeService` (orchestration), with
+`StampWebClient` (HTTP + retries, sleeps via `ClockInterface`),
+`InertiaPageParser` (page JSON) and `StampWebScrapeOutput` (file layout).
 
 ## Geocoding
 

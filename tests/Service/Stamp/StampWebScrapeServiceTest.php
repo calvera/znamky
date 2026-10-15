@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace App\Tests\Service\Stamp;
 
+use App\Service\Stamp\InertiaPageParser;
+use App\Service\Stamp\StampWebClient;
 use App\Service\Stamp\StampWebScrapeOptions;
 use App\Service\Stamp\StampWebScrapeService;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Clock\MockClock;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 
@@ -18,19 +21,6 @@ use function Safe\unlink;
 
 final class StampWebScrapeServiceTest extends TestCase
 {
-    public function testParseItemFromInertiaHtml(): void
-    {
-        $html = file_get_contents(__DIR__.'/../../fixtures/stamp_web/item_detail.html');
-        $service = new StampWebScrapeService(new MockHttpClient());
-        $item = $service->parseItemFromInertiaHtml($html);
-
-        self::assertSame(3535, $item['id']);
-        self::assertSame('Praděd', $item['name']);
-        $images = $item['images'] ?? null;
-        self::assertIsArray($images);
-        self::assertCount(2, $images);
-    }
-
     public function testScrapeWritesJsonAndClassifiesImages(): void
     {
         $listHtml = file_get_contents(__DIR__.'/../../fixtures/stamp_web/items_list.html');
@@ -60,7 +50,7 @@ final class StampWebScrapeServiceTest extends TestCase
         });
 
         $outputDir = sys_get_temp_dir().'/znamky-scrape-'.bin2hex(random_bytes(4));
-        $service = new StampWebScrapeService($client);
+        $service = $this->service($client);
         $stats = $service->scrape(new StampWebScrapeOptions(
             outputDir: $outputDir,
             delayDetailMs: 0,
@@ -163,7 +153,7 @@ final class StampWebScrapeServiceTest extends TestCase
 
         $outputDir = sys_get_temp_dir().'/znamky-scrape-'.bin2hex(random_bytes(4));
         $stampDir = $outputDir.'/stamps/3535';
-        $stats = (new StampWebScrapeService($client))->scrape(new StampWebScrapeOptions(
+        $stats = $this->service($client)->scrape(new StampWebScrapeOptions(
             outputDir: $outputDir,
             delayDetailMs: 0,
             delayListMs: 0,
@@ -182,15 +172,6 @@ final class StampWebScrapeServiceTest extends TestCase
         self::assertFileDoesNotExist($outputDir.'/stamps/outside.png');
         self::assertSame('OUTSIDE', file_get_contents($stampDir.'/images/current/outside.png'));
         self::assertSame('EVIL', file_get_contents($stampDir.'/images/archive/evil.png'));
-    }
-
-    public function testParseInertiaPageWithoutDataPageThrows(): void
-    {
-        $service = new StampWebScrapeService(new MockHttpClient());
-
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('data-page');
-        $service->parseInertiaPage('<html><body>nope</body></html>');
     }
 
     public function testRequestPassesTimeoutOptions(): void
@@ -219,7 +200,7 @@ final class StampWebScrapeServiceTest extends TestCase
         });
 
         $outputDir = sys_get_temp_dir().'/znamky-scrape-'.bin2hex(random_bytes(4));
-        (new StampWebScrapeService($client))->scrape(new StampWebScrapeOptions(
+        $this->service($client)->scrape(new StampWebScrapeOptions(
             outputDir: $outputDir,
             delayDetailMs: 0,
             delayListMs: 0,
@@ -265,7 +246,7 @@ final class StampWebScrapeServiceTest extends TestCase
         });
 
         $outputDir = sys_get_temp_dir().'/znamky-scrape-'.bin2hex(random_bytes(4));
-        $stats = (new StampWebScrapeService($client))->scrape(new StampWebScrapeOptions(
+        $stats = $this->service($client)->scrape(new StampWebScrapeOptions(
             outputDir: $outputDir,
             delayDetailMs: 0,
             delayListMs: 0,
@@ -301,7 +282,7 @@ final class StampWebScrapeServiceTest extends TestCase
         });
 
         $outputDir = sys_get_temp_dir().'/znamky-scrape-'.bin2hex(random_bytes(4));
-        $stats = (new StampWebScrapeService($client))->scrape(new StampWebScrapeOptions(
+        $stats = $this->service($client)->scrape(new StampWebScrapeOptions(
             outputDir: $outputDir,
             delayDetailMs: 0,
             delayListMs: 0,
@@ -340,7 +321,7 @@ final class StampWebScrapeServiceTest extends TestCase
         });
 
         $outputDir = sys_get_temp_dir().'/znamky-scrape-'.bin2hex(random_bytes(4));
-        $stats = (new StampWebScrapeService($client))->scrape($this->quietOptions($outputDir, retries: 3));
+        $stats = $this->service($client)->scrape($this->quietOptions($outputDir, retries: 3));
 
         self::assertSame(1, $detailAttempts);
         self::assertSame(0, $stats['scraped']);
@@ -381,7 +362,7 @@ final class StampWebScrapeServiceTest extends TestCase
         });
 
         $outputDir = sys_get_temp_dir().'/znamky-scrape-'.bin2hex(random_bytes(4));
-        $stats = (new StampWebScrapeService($client))->scrape($this->quietOptions($outputDir));
+        $stats = $this->service($client)->scrape($this->quietOptions($outputDir));
 
         self::assertSame(3, $detailAttempts);
         self::assertSame(1, $stats['scraped']);
@@ -411,7 +392,7 @@ final class StampWebScrapeServiceTest extends TestCase
         });
 
         $outputDir = sys_get_temp_dir().'/znamky-scrape-'.bin2hex(random_bytes(4));
-        $stats = (new StampWebScrapeService($client))->scrape($this->quietOptions($outputDir, rateLimitRetries: 1));
+        $stats = $this->service($client)->scrape($this->quietOptions($outputDir, rateLimitRetries: 1));
 
         self::assertSame(2, $detailAttempts);
         self::assertSame(0, $stats['scraped']);
@@ -445,7 +426,7 @@ final class StampWebScrapeServiceTest extends TestCase
         });
 
         $outputDir = sys_get_temp_dir().'/znamky-scrape-'.bin2hex(random_bytes(4));
-        $stats = (new StampWebScrapeService($client))->scrape($this->quietOptions(
+        $stats = $this->service($client)->scrape($this->quietOptions(
             $outputDir,
             retries: 0,
             rateLimitRetries: 1,
@@ -480,7 +461,7 @@ final class StampWebScrapeServiceTest extends TestCase
         });
 
         $outputDir = sys_get_temp_dir().'/znamky-scrape-'.bin2hex(random_bytes(4));
-        $stats = (new StampWebScrapeService($client))->scrape($this->quietOptions(
+        $stats = $this->service($client)->scrape($this->quietOptions(
             $outputDir,
             retries: 3,
             rateLimitRetries: 0,
@@ -519,7 +500,7 @@ final class StampWebScrapeServiceTest extends TestCase
         });
 
         $outputDir = sys_get_temp_dir().'/znamky-scrape-'.bin2hex(random_bytes(4));
-        $stats = (new StampWebScrapeService($client))->scrape($this->quietOptions(
+        $stats = $this->service($client)->scrape($this->quietOptions(
             $outputDir,
             retries: 1,
             skipImages: true,
@@ -568,7 +549,7 @@ final class StampWebScrapeServiceTest extends TestCase
 
         $outputDir = sys_get_temp_dir().'/znamky-scrape-'.bin2hex(random_bytes(4));
         $stampDir = $outputDir.'/stamps/3535';
-        $stats = (new StampWebScrapeService($client))->scrape($this->quietOptions($outputDir));
+        $stats = $this->service($client)->scrape($this->quietOptions($outputDir));
 
         self::assertSame(0, $stats['failed']);
         self::assertSame(1, $stats['images']);
@@ -637,7 +618,7 @@ final class StampWebScrapeServiceTest extends TestCase
         });
 
         $outputDir = sys_get_temp_dir().'/znamky-scrape-'.bin2hex(random_bytes(4));
-        $stats = (new StampWebScrapeService($client))->scrape($this->quietOptions($outputDir, limit: 2, skipImages: true));
+        $stats = $this->service($client)->scrape($this->quietOptions($outputDir, limit: 2, skipImages: true));
 
         self::assertSame([1, 2], $lazyPages);
         self::assertSame([10, 11], $detailIds);
@@ -697,7 +678,7 @@ final class StampWebScrapeServiceTest extends TestCase
         });
 
         $outputDir = sys_get_temp_dir().'/znamky-scrape-'.bin2hex(random_bytes(4));
-        $stats = (new StampWebScrapeService($client))->scrape($this->quietOptions($outputDir, limit: null, skipImages: true));
+        $stats = $this->service($client)->scrape($this->quietOptions($outputDir, limit: null, skipImages: true));
 
         self::assertSame([1, 2], $lazyPages);
         self::assertSame(1, $stats['discovered']);
@@ -744,7 +725,7 @@ final class StampWebScrapeServiceTest extends TestCase
         });
 
         $outputDir = sys_get_temp_dir().'/znamky-scrape-'.bin2hex(random_bytes(4));
-        $stats = (new StampWebScrapeService($client))->scrape($this->quietOptions($outputDir, limit: null, skipImages: true));
+        $stats = $this->service($client)->scrape($this->quietOptions($outputDir, limit: null, skipImages: true));
 
         self::assertSame([1], $lazyPages);
         self::assertSame(1, $stats['discovered']);
@@ -771,7 +752,7 @@ final class StampWebScrapeServiceTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('No countries matched the scrape filters.');
 
-        (new StampWebScrapeService($client))->scrape($this->quietOptions($outputDir, countryId: 99));
+        $this->service($client)->scrape($this->quietOptions($outputDir, countryId: 99));
     }
 
     public function testUnmatchedTypeFilterAbortsBeforeDiscovery(): void
@@ -792,7 +773,7 @@ final class StampWebScrapeServiceTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('No types matched the scrape filters.');
 
-        (new StampWebScrapeService($client))->scrape($this->quietOptions($outputDir, typeId: 99));
+        $this->service($client)->scrape($this->quietOptions($outputDir, typeId: 99));
     }
 
     public function testForceRescrapesAnExistingStamp(): void
@@ -822,7 +803,7 @@ final class StampWebScrapeServiceTest extends TestCase
         });
 
         $outputDir = sys_get_temp_dir().'/znamky-scrape-'.bin2hex(random_bytes(4));
-        $service = new StampWebScrapeService($client);
+        $service = $this->service($client);
         $service->scrape($this->quietOptions($outputDir, skipImages: true));
         $stats = $service->scrape($this->quietOptions($outputDir, skipImages: true, force: true));
 
@@ -857,7 +838,7 @@ final class StampWebScrapeServiceTest extends TestCase
 
         $outputDir = sys_get_temp_dir().'/znamky-scrape-'.bin2hex(random_bytes(4));
         $stampDir = $outputDir.'/stamps/3535';
-        (new StampWebScrapeService($firstClient))->scrape($this->quietOptions($outputDir));
+        $this->service($firstClient)->scrape($this->quietOptions($outputDir));
 
         $currentPath = $stampDir.'/images/current/current.png';
         $archivePath = $stampDir.'/images/archive/archive.png';
@@ -881,7 +862,7 @@ final class StampWebScrapeServiceTest extends TestCase
             self::fail('Unexpected URL: '.$url);
         });
 
-        $stats = (new StampWebScrapeService($resumeClient))->scrape($this->quietOptions($outputDir));
+        $stats = $this->service($resumeClient)->scrape($this->quietOptions($outputDir));
 
         self::assertSame(1, $stats['scraped']);
         self::assertSame(0, $stats['failed']);
@@ -926,7 +907,7 @@ final class StampWebScrapeServiceTest extends TestCase
         });
 
         $outputDir = sys_get_temp_dir().'/znamky-scrape-'.bin2hex(random_bytes(4));
-        $stats = (new StampWebScrapeService($client))->scrape($this->quietOptions($outputDir, skipImages: true));
+        $stats = $this->service($client)->scrape($this->quietOptions($outputDir, skipImages: true));
 
         self::assertSame(2, $stats['discovered']);
         self::assertSame(1, $stats['scraped']);
@@ -991,7 +972,7 @@ final class StampWebScrapeServiceTest extends TestCase
         });
 
         $outputDir = sys_get_temp_dir().'/znamky-scrape-'.bin2hex(random_bytes(4));
-        $stats = (new StampWebScrapeService($client))->scrape(new StampWebScrapeOptions(
+        $stats = $this->service($client)->scrape(new StampWebScrapeOptions(
             outputDir: $outputDir,
             delayDetailMs: 0,
             delayListMs: 0,
@@ -1011,6 +992,13 @@ final class StampWebScrapeServiceTest extends TestCase
         self::assertSame(0, $stats['failed']);
         self::assertSame(1, substr_count(file_get_contents($outputDir.'/index.jsonl'), "\n"));
         self::assertFileExists($outputDir.'/stamps/21/stamp.json');
+    }
+
+    private function service(MockHttpClient $client): StampWebScrapeService
+    {
+        $clock = new MockClock();
+
+        return new StampWebScrapeService(new StampWebClient($client, $clock), new InertiaPageParser(), $clock);
     }
 
     private function lazyPageNumber(string $url): int
