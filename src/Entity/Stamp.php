@@ -18,7 +18,6 @@ use App\Enum\StampType;
 use App\Repository\StampRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
-use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Validator\Constraints as Assert;
@@ -81,8 +80,10 @@ use Symfony\Component\Validator\Constraints as Assert;
     ],
     normalizationContext: ['groups' => ['stamp:read']],
 )]
-class Stamp
+class Stamp implements Geocodable
 {
+    use HasCoordinates;
+
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
@@ -114,12 +115,6 @@ class Stamp
     #[ORM\Column(length: 120, nullable: true)]
     #[Groups(['stamp:read'])]
     private ?string $region = null;
-
-    #[ORM\Column(type: Types::DECIMAL, precision: 10, scale: 7, nullable: true)]
-    private ?string $latitude = null;
-
-    #[ORM\Column(type: Types::DECIMAL, precision: 10, scale: 7, nullable: true)]
-    private ?string $longitude = null;
 
     /**
      * @var Collection<int, StampTag>
@@ -216,32 +211,6 @@ class Stamp
     public function setRegion(?string $region): static
     {
         $this->region = $region;
-
-        return $this;
-    }
-
-    #[Groups(['stamp:read'])]
-    public function getLatitude(): ?float
-    {
-        return null === $this->latitude ? null : (float) $this->latitude;
-    }
-
-    public function setLatitude(?float $latitude): static
-    {
-        $this->latitude = null === $latitude ? null : \sprintf('%.7F', $latitude);
-
-        return $this;
-    }
-
-    #[Groups(['stamp:read'])]
-    public function getLongitude(): ?float
-    {
-        return null === $this->longitude ? null : (float) $this->longitude;
-    }
-
-    public function setLongitude(?float $longitude): static
-    {
-        $this->longitude = null === $longitude ? null : \sprintf('%.7F', $longitude);
 
         return $this;
     }
