@@ -16,10 +16,6 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\String\Slugger\SluggerInterface;
 use Webmozart\Assert\Assert;
 
-use function Safe\fclose;
-use function Safe\fgetcsv;
-use function Safe\fopen;
-
 final class StampImportService
 {
     private const BATCH_SIZE = 100;
@@ -37,6 +33,7 @@ final class StampImportService
         private readonly StampPlaceRepository $stampPlaceRepository,
         private readonly PlaceLineParser $placeLineParser,
         private readonly SluggerInterface $slugger,
+        private readonly StampCsvReader $csvReader,
     ) {
     }
 
@@ -112,80 +109,37 @@ final class StampImportService
 
     private function importFile(string $path, StampCountry $defaultCountry, StampType $defaultType): int
     {
-        $handle = fopen($path, 'rb');
+        $count = 0;
+        foreach ($this->csvReader->read($path, ['Číslo', 'Název']) as $row) {
+            $this->importRow($row, $defaultCountry, $defaultType);
+            ++$count;
 
-        try {
-            $header = fgetcsv($handle, length: 0, separator: ';', enclosure: '"', escape: '\\');
-            if (false === $header) {
-                return 0;
+            if (0 === $count % self::BATCH_SIZE) {
+                $this->flushAndClear();
             }
-
-            $header = $this->normalizeCsvRow($header);
-            $header[0] = $this->stripBom((string) $header[0]);
-            $header = array_map(static fn (?string $h): string => trim((string) $h, " \t\n\r\0\x0B\""), $header);
-            $indexes = $this->mapIndexes($header);
-
-            $count = 0;
-            while (false !== ($rawRow = fgetcsv($handle, length: 0, separator: ';', enclosure: '"', escape: '\\'))) {
-                $row = $this->normalizeCsvRow($rawRow);
-                if ($this->isEmptyRow($row)) {
-                    continue;
-                }
-
-                $this->importRow($row, $indexes, $defaultCountry, $defaultType);
-                ++$count;
-
-                if (0 === $count % self::BATCH_SIZE) {
-                    $this->flushAndClear();
-                }
-            }
-
-            return $count;
-        } finally {
-            fclose($handle);
         }
+
+        return $count;
     }
 
     /**
-     * @param array<mixed> $row
-     *
-     * @return list<?string>
+     * @param array<string, string> $row
      */
-    private function normalizeCsvRow(array $row): array
+    private function importRow(array $row, StampCountry $defaultCountry, StampType $defaultType): void
     {
-        $values = array_values($row);
-        Assert::allNullOrString($values);
-
-        return $values;
-    }
-
-    /**
-     * @param list<?string>      $row
-     * @param array<string, int> $indexes
-     */
-    private function importRow(
-        array $row,
-        array $indexes,
-        StampCountry $defaultCountry,
-        StampType $defaultType,
-    ): void {
-        $number = (int) $this->cell($row, $indexes, 'Číslo');
-        $name = $this->cell($row, $indexes, 'Název');
+        $number = (int) $row['Číslo'];
+        $name = $row['Název'];
         if (0 === $number || '' === $name) {
             return;
         }
 
-        $country = isset($indexes['Země'])
-            ? StampCountry::fromCsv($this->cell($row, $indexes, 'Země'))
-            : $defaultCountry;
-        $type = isset($indexes['Typ'])
-            ? StampType::fromCsv($this->cell($row, $indexes, 'Typ'))
-            : $defaultType;
+        $country = isset($row['Země']) ? StampCountry::fromCsv($row['Země']) : $defaultCountry;
+        $type = isset($row['Typ']) ? StampType::fromCsv($row['Typ']) : $defaultType;
 
-        $district = $this->nullableCell($row, $indexes, 'Okres');
-        $region = $this->nullableCell($row, $indexes, 'Kraj');
-        $kategorie = $this->nullableCell($row, $indexes, 'Kategorie');
-        $placesCell = $this->nullableCell($row, $indexes, 'Prodejní místa (název a web)');
+        $district = $this->nullable($row['Okres'] ?? '');
+        $region = $this->nullable($row['Kraj'] ?? '');
+        $kategorie = $this->nullable($row['Kategorie'] ?? '');
+        $placesCell = $this->nullable($row['Prodejní místa (název a web)'] ?? '');
 
         $stamp = $this->stampRepository->findOneByIdentity($country, $type, $number);
         if (null === $stamp) {
@@ -247,66 +201,8 @@ final class StampImportService
         return $this->placeCache[$cacheKey] = $place;
     }
 
-    /**
-     * @param list<string> $header
-     *
-     * @return array<string, int>
-     */
-    private function mapIndexes(array $header): array
+    private function nullable(string $value): ?string
     {
-        $indexes = [];
-        foreach ($header as $i => $column) {
-            if ('' !== $column) {
-                $indexes[$column] = $i;
-            }
-        }
-
-        Assert::keyExists($indexes, 'Číslo', 'CSV is missing required Číslo/Název columns.');
-        Assert::keyExists($indexes, 'Název', 'CSV is missing required Číslo/Název columns.');
-
-        return $indexes;
-    }
-
-    /**
-     * @param list<?string>      $row
-     * @param array<string, int> $indexes
-     */
-    private function cell(array $row, array $indexes, string $column): string
-    {
-        if (!isset($indexes[$column])) {
-            return '';
-        }
-
-        return trim((string) ($row[$indexes[$column]] ?? ''));
-    }
-
-    /**
-     * @param list<?string>      $row
-     * @param array<string, int> $indexes
-     */
-    private function nullableCell(array $row, array $indexes, string $column): ?string
-    {
-        $value = $this->cell($row, $indexes, $column);
-
         return '' === $value ? null : $value;
-    }
-
-    /**
-     * @param list<?string> $row
-     */
-    private function isEmptyRow(array $row): bool
-    {
-        foreach ($row as $value) {
-            if (null !== $value && '' !== trim($value)) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private function stripBom(string $value): string
-    {
-        return str_starts_with($value, "\xEF\xBB\xBF") ? substr($value, 3) : $value;
     }
 }
