@@ -6,9 +6,8 @@ namespace App\Command;
 
 use App\Service\Stamp\StampGeocodeService;
 use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Attribute\Option;
 use Symfony\Component\Console\Command\Command;
-use Symfony\Component\Console\Input\InputInterface;
-use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\Lock\LockFactory;
@@ -18,37 +17,27 @@ use Webmozart\Assert\Assert;
     name: 'app:stamps:geocode',
     description: 'Geocode stamps and places via Google Maps Geocoding API',
 )]
-final class GeocodeStampsCommand extends Command
+final class GeocodeStampsCommand
 {
-    private const LOCK_RESOURCE = 'stamps-catalog';
+    private const string LOCK_RESOURCE = 'stamps-catalog';
 
     public function __construct(
         private readonly StampGeocodeService $stampGeocodeService,
         private readonly LockFactory $lockFactory,
     ) {
-        parent::__construct();
     }
 
-    protected function configure(): void
-    {
-        $this
-            ->addOption('only', null, InputOption::VALUE_REQUIRED, 'Geocode stamps, places, or all', 'all')
-            ->addOption('force', null, InputOption::VALUE_NONE, 'Re-geocode rows that already have coordinates')
-            ->addOption('delay', null, InputOption::VALUE_REQUIRED, 'Delay in milliseconds between API calls', '50');
-    }
-
-    protected function execute(InputInterface $input, OutputInterface $output): int
-    {
-        $io = new SymfonyStyle($input, $output);
-
-        $only = Assert::string($input->getOption('only'), '--only must be a string');
+    public function __invoke(
+        SymfonyStyle $io,
+        #[Option('Geocode stamps, places, or all', suggestedValues: ['stamps', 'places', 'all'])]
+        string $only = 'all',
+        #[Option('Re-geocode rows that already have coordinates')]
+        bool $force = false,
+        #[Option('Delay in milliseconds between API calls')]
+        int $delay = 50,
+    ): int {
         Assert::inArray($only, ['stamps', 'places', 'all'], '--only must be one of: stamps, places, all');
-
-        $delayOption = $input->getOption('delay');
-        Assert::integerish($delayOption, '--delay must be an integer');
-
-        $force = true === $input->getOption('force');
-        $delayMs = max(0, (int) $delayOption);
+        $delayMs = max(0, $delay);
 
         $lock = $this->lockFactory->createLock(self::LOCK_RESOURCE);
         if (!$lock->acquire()) {

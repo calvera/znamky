@@ -6,14 +6,11 @@ namespace App\Command;
 
 use App\Service\Stamp\StampImportService;
 use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Attribute\Option;
 use Symfony\Component\Console\Command\Command;
-use Symfony\Component\Console\Input\InputInterface;
-use Symfony\Component\Console\Input\InputOption;
-use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Lock\LockFactory;
-use Webmozart\Assert\Assert;
 
 use function Safe\ini_set;
 
@@ -21,9 +18,9 @@ use function Safe\ini_set;
     name: 'app:stamps:import',
     description: 'Import tourist stamps from CSV files under data/',
 )]
-final class ImportStampsCommand extends Command
+final class ImportStampsCommand
 {
-    private const LOCK_RESOURCE = 'stamps-catalog';
+    private const string LOCK_RESOURCE = 'stamps-catalog';
 
     public function __construct(
         private readonly StampImportService $stampImportService,
@@ -31,23 +28,19 @@ final class ImportStampsCommand extends Command
         #[Autowire('%kernel.project_dir%')]
         private readonly string $projectDir,
     ) {
-        parent::__construct();
     }
 
-    protected function configure(): void
-    {
-        $this
-            ->addOption('path', null, InputOption::VALUE_REQUIRED, 'Directory containing CSV files', 'data')
-            ->addOption('purge', null, InputOption::VALUE_NONE, 'Truncate stamps, tags, and places before import');
-    }
-
-    protected function execute(InputInterface $input, OutputInterface $output): int
-    {
+    public function __invoke(
+        SymfonyStyle $io,
+        #[Option('Directory containing CSV files')]
+        string $path = 'data',
+        #[Option('Truncate stamps, tags, and places before import')]
+        bool $purge = false,
+    ): int {
         if (\function_exists('ini_set')) {
             ini_set('memory_limit', '512M');
         }
 
-        $io = new SymfonyStyle($input, $output);
         $lock = $this->lockFactory->createLock(self::LOCK_RESOURCE);
         if (!$lock->acquire()) {
             $io->error('Another stamp catalog operation is already running.');
@@ -56,12 +49,10 @@ final class ImportStampsCommand extends Command
         }
 
         try {
-            $path = Assert::string($input->getOption('path'), '--path must be a string');
             if (!str_starts_with($path, '/')) {
                 $path = $this->projectDir.\DIRECTORY_SEPARATOR.$path;
             }
 
-            $purge = true === $input->getOption('purge');
             if ($purge) {
                 $io->warning('Purging existing stamp catalog before import.');
             }
