@@ -54,6 +54,14 @@ final class CleartextSpentRefreshTokenRegistry implements SpentRefreshTokenRegis
             return;
         }
 
+        $this->rememberCleartext($refreshToken, $cleartext);
+    }
+
+    /**
+     * Remembers the token under the cleartext the client presented, leaving the stored value intact.
+     */
+    public function rememberCleartext(RefreshTokenInterface $refreshToken, string $cleartext): void
+    {
         $storedValue = $refreshToken->getRefreshToken();
         $refreshToken->setRefreshToken($cleartext);
         $this->inner->remember($refreshToken);

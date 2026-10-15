@@ -8,12 +8,12 @@ use ApiPlatform\GraphQl\Resolver\MutationResolverInterface;
 use App\ApiResource\Auth;
 use App\Dto\Auth\RefreshTokenRequest;
 use App\GraphQl\Auth\AuthInputValidator;
-use App\Service\Auth\AuthTokenService;
+use App\Service\Auth\RefreshTokenRotator;
 
 final class RefreshTokenMutationResolver implements MutationResolverInterface
 {
     public function __construct(
-        private readonly AuthTokenService $authTokenService,
+        private readonly RefreshTokenRotator $refreshTokenRotator,
         private readonly AuthInputValidator $inputValidator,
     ) {
     }
@@ -22,7 +22,7 @@ final class RefreshTokenMutationResolver implements MutationResolverInterface
     {
         $request = $this->inputValidator->dto($context, RefreshTokenRequest::class);
 
-        $tokens = $this->authTokenService->refresh($request->refreshToken);
+        $tokens = $this->refreshTokenRotator->rotate($request->refreshToken);
 
         return Auth::tokens($tokens['token'], $tokens['refresh_token']);
     }
