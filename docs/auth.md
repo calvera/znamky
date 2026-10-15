@@ -210,7 +210,7 @@ Password minimum length is **8** characters.
 |----------|---------|---------|
 | `POST /api/register`, `POST /api/forgot-password` | `auth_email` | 10 / 15 minutes per IP |
 | `POST /api/verify-email`, `POST /api/reset-password` | `auth_token` | 20 / 15 minutes per IP |
-| `POST /api/login` | login throttling (`username+IP` + `IP`) | 5 / 5 minutes per username+IP; 50 / 15 minutes per IP |
+| `POST /api/login`, GraphQL `loginUser` | login throttling (`username+IP` + `IP`) | 5 / 5 minutes per username+IP; 50 / 15 minutes per IP. Only failed attempts consume the IP budget. |
 
 Config: `config/packages/rate_limiter.yaml`.
 

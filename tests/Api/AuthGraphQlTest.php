@@ -731,6 +731,23 @@ final class AuthGraphQlTest extends WebTestCase
         $this->assertGraphQlError($blockedAgain, Response::HTTP_UNAUTHORIZED, 'Too many failed login attempts');
     }
 
+    public function testSuccessfulGraphQlLoginsDoNotExhaustTheIpLimit(): void
+    {
+        $password = 'password123';
+        $this->registerVerifyAndLogin('graphql-ip-budget@example.com', $password);
+
+        // Test env allows 20 login attempts per IP. Successes must not spend that
+        // budget, or one client logging in repeatedly locks out every account.
+        for ($attempt = 1; $attempt <= 20; ++$attempt) {
+            $login = $this->loginMutation('graphql-ip-budget@example.com', $password);
+            self::assertResponseIsSuccessful();
+            self::assertArrayNotHasKey('errors', $login, sprintf('successful login %d should not be throttled', $attempt));
+        }
+
+        $other = $this->registerVerifyAndLogin('graphql-ip-budget-other@example.com', $password);
+        self::assertNotSame('', $other['token']);
+    }
+
     public function testEmailAndTokenRateLimitsAreIndependent(): void
     {
         for ($i = 1; $i <= 4; ++$i) {
@@ -1285,6 +1302,29 @@ final class AuthGraphQlTest extends WebTestCase
         $payload = $this->stringKeyedArray($data['forgotPasswordUser'] ?? null, 'forgotPasswordUser');
         $user = $this->stringKeyedArray($payload['user'] ?? null, 'forgotPasswordUser.user');
         self::assertTrue($user['success'] ?? false);
+    }
+
+    public function testRefreshRejectsATokenWhoseUserWasDeleted(): void
+    {
+        $email = 'graphql-deleted-refresh@example.com';
+        $tokens = $this->registerVerifyAndLogin($email, 'password123');
+
+        $user = $this->users()->findOneByEmail($email);
+        self::assertInstanceOf(User::class, $user);
+        $this->entityManager()->remove($user);
+        $this->entityManager()->flush();
+
+        $blocked = $this->refreshMutation($tokens['refreshToken']);
+        $this->assertGraphQlError($blocked, Response::HTTP_UNAUTHORIZED, 'Invalid refresh token.');
+
+        $this->entityManager()->clear();
+        $remaining = $this->entityManager()->getRepository(RefreshToken::class)->findBy([
+            'username' => $email,
+        ]);
+        self::assertCount(1, $remaining);
+
+        $again = $this->refreshMutation($tokens['refreshToken']);
+        $this->assertGraphQlError($again, Response::HTTP_UNAUTHORIZED, 'Invalid refresh token.');
     }
 
     /**

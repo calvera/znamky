@@ -872,6 +872,128 @@ final class StampWebScrapeServiceTest extends TestCase
         self::assertSame('ORIGINAL', file_get_contents($archivePath));
     }
 
+    public function testOneBadDetailDoesNotStopTheNextStamp(): void
+    {
+        $listHtml = file_get_contents(__DIR__.'/../../fixtures/stamp_web/items_list.html');
+        $detailHtml = file_get_contents(__DIR__.'/../../fixtures/stamp_web/item_detail.html');
+        $lazyJson = json_encode([
+            'items' => [
+                ['id' => 10, 'no' => 1, 'name' => 'Broken'],
+                ['id' => 11, 'no' => 2, 'name' => 'Kept'],
+            ],
+            'totalRecords' => 2,
+            'itemsPerPage' => 100,
+            'currentPage' => 1,
+        ], \JSON_THROW_ON_ERROR);
+
+        $client = new MockHttpClient(function (string $method, string $url) use ($listHtml, $detailHtml, $lazyJson): MockResponse {
+            if (str_contains($url, '/items/lazy')) {
+                return new MockResponse($lazyJson, ['response_headers' => ['content-type' => 'application/json']]);
+            }
+            if (str_contains($url, '/items/10')) {
+                return new MockResponse('<html><body>no inertia page</body></html>');
+            }
+            if (str_contains($url, '/items/11')) {
+                return new MockResponse($detailHtml, ['response_headers' => ['content-type' => 'text/html']]);
+            }
+            if (str_contains($url, '/storage/item_images/')) {
+                self::fail('skipImages must not download images: '.$url);
+            }
+            if (str_contains($url, '/items?') || str_ends_with($url, '/items')) {
+                return new MockResponse($listHtml, ['response_headers' => ['content-type' => 'text/html']]);
+            }
+
+            self::fail('Unexpected URL: '.$url);
+        });
+
+        $outputDir = sys_get_temp_dir().'/znamky-scrape-'.bin2hex(random_bytes(4));
+        $stats = $this->service($client)->scrape($this->quietOptions($outputDir, skipImages: true));
+
+        self::assertSame(2, $stats['discovered']);
+        self::assertSame(1, $stats['scraped']);
+        self::assertSame(1, $stats['failed']);
+        self::assertSame(0, $stats['skipped']);
+        self::assertFileDoesNotExist($outputDir.'/stamps/10/stamp.json');
+        self::assertFileExists($outputDir.'/stamps/11/stamp.json');
+
+        $index = file_get_contents($outputDir.'/index.jsonl');
+        self::assertSame(1, substr_count($index, "\n"));
+        $row = json_decode(trim($index), true);
+        self::assertIsArray($row);
+        self::assertSame(11, $row['id'] ?? null);
+        self::assertSame(1, $row['countryId'] ?? null);
+        self::assertSame(0, $row['typeId'] ?? null);
+        self::assertSame('TZ', $row['type'] ?? null);
+        self::assertSame('stamps/11/stamp.json', $row['path'] ?? null);
+    }
+
+    public function testDuplicateIdAcrossTypeBucketsIsScrapedOnce(): void
+    {
+        $listHtml = $this->catalogListHtml([
+            ['id' => 0, 'name' => 'Tourist Stamp', 'short' => 'TZ'],
+            ['id' => 1, 'name' => 'Annual', 'short' => 'VTZ'],
+        ]);
+        $detailHtml = file_get_contents(__DIR__.'/../../fixtures/stamp_web/item_detail.html');
+        $lazyJson = json_encode([
+            'items' => [
+                ['id' => 21, 'no' => 1, 'name' => 'Shared'],
+            ],
+            'totalRecords' => 1,
+            'itemsPerPage' => 100,
+            'currentPage' => 1,
+        ], \JSON_THROW_ON_ERROR);
+
+        $types = [];
+        $detailIds = [];
+        $client = new MockHttpClient(function (string $method, string $url) use ($listHtml, $detailHtml, $lazyJson, &$types, &$detailIds): MockResponse {
+            if (str_contains($url, '/items/lazy')) {
+                $query = parse_url($url, \PHP_URL_QUERY);
+                self::assertIsString($query);
+                parse_str($query, $params);
+                $type = $params['type'] ?? null;
+                self::assertIsScalar($type);
+                $types[] = (int) $type;
+
+                return new MockResponse($lazyJson, ['response_headers' => ['content-type' => 'application/json']]);
+            }
+            if (1 === preg_match('#/items/(\d+)$#', $url, $matches) && isset($matches[1])) {
+                $detailIds[] = (int) $matches[1];
+
+                return new MockResponse($detailHtml, ['response_headers' => ['content-type' => 'text/html']]);
+            }
+            if (str_contains($url, '/storage/item_images/')) {
+                self::fail('skipImages must not download images: '.$url);
+            }
+            if (str_contains($url, '/items?') || str_ends_with($url, '/items')) {
+                return new MockResponse($listHtml, ['response_headers' => ['content-type' => 'text/html']]);
+            }
+
+            self::fail('Unexpected URL: '.$url);
+        });
+
+        $outputDir = sys_get_temp_dir().'/znamky-scrape-'.bin2hex(random_bytes(4));
+        $stats = $this->service($client)->scrape(new StampWebScrapeOptions(
+            outputDir: $outputDir,
+            delayDetailMs: 0,
+            delayListMs: 0,
+            delayImageMs: 0,
+            batchPauseMs: 0,
+            bucketPauseMs: 0,
+            countryId: 1,
+            skipImages: true,
+            retries: 0,
+            rateLimitRetries: 0,
+        ));
+
+        self::assertSame([0, 1], $types);
+        self::assertSame([21], $detailIds);
+        self::assertSame(1, $stats['discovered']);
+        self::assertSame(1, $stats['scraped']);
+        self::assertSame(0, $stats['failed']);
+        self::assertSame(1, substr_count(file_get_contents($outputDir.'/index.jsonl'), "\n"));
+        self::assertFileExists($outputDir.'/stamps/21/stamp.json');
+    }
+
     private function service(MockHttpClient $client): StampWebScrapeService
     {
         $clock = new MockClock();
@@ -915,5 +1037,33 @@ final class StampWebScrapeServiceTest extends TestCase
             retries: $retries,
             rateLimitRetries: $rateLimitRetries,
         );
+    }
+
+    /**
+     * @param list<array{id: int, name: string, short: string}> $types
+     */
+    private function catalogListHtml(array $types): string
+    {
+        $page = [
+            'component' => 'Items',
+            'props' => [
+                'referenceData' => [
+                    'countries' => [
+                        ['id' => 1, 'name' => 'Czech Republic', 'short' => 'CZ'],
+                    ],
+                ],
+                'filtersData' => [
+                    'types' => $types,
+                ],
+            ],
+            'url' => '/items',
+        ];
+        $encoded = htmlspecialchars(
+            json_encode($page, \JSON_THROW_ON_ERROR | \JSON_UNESCAPED_UNICODE),
+            \ENT_QUOTES | \ENT_HTML5,
+            'UTF-8',
+        );
+
+        return '<div id="app" data-page="'.$encoded.'"></div>';
     }
 }
