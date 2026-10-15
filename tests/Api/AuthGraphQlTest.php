@@ -1287,6 +1287,29 @@ final class AuthGraphQlTest extends WebTestCase
         self::assertTrue($user['success'] ?? false);
     }
 
+    public function testRefreshRejectsATokenWhoseUserWasDeleted(): void
+    {
+        $email = 'graphql-deleted-refresh@example.com';
+        $tokens = $this->registerVerifyAndLogin($email, 'password123');
+
+        $user = $this->users()->findOneByEmail($email);
+        self::assertInstanceOf(User::class, $user);
+        $this->entityManager()->remove($user);
+        $this->entityManager()->flush();
+
+        $blocked = $this->refreshMutation($tokens['refreshToken']);
+        $this->assertGraphQlError($blocked, Response::HTTP_UNAUTHORIZED, 'Invalid refresh token.');
+
+        $this->entityManager()->clear();
+        $remaining = $this->entityManager()->getRepository(RefreshToken::class)->findBy([
+            'username' => $email,
+        ]);
+        self::assertCount(1, $remaining);
+
+        $again = $this->refreshMutation($tokens['refreshToken']);
+        $this->assertGraphQlError($again, Response::HTTP_UNAUTHORIZED, 'Invalid refresh token.');
+    }
+
     /**
      * @return array<string, mixed>
      */

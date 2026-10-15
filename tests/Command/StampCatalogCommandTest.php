@@ -210,6 +210,43 @@ final class StampCatalogCommandTest extends KernelTestCase
         self::assertSame(17.5, $stamp->getLongitude());
     }
 
+    public function testGeocodeRejectsNonIntegerDelayBeforeTakingTheLock(): void
+    {
+        $lock = $this->holdCatalogLock();
+
+        try {
+            $tester = $this->tester('app:stamps:geocode');
+            try {
+                $tester->execute([
+                    '--only' => 'stamps',
+                    '--delay' => 'fast',
+                ]);
+                self::fail('A non-integer --delay must abort the command.');
+            } catch (\InvalidArgumentException $e) {
+                self::assertSame('--delay must be an integer', $e->getMessage());
+                self::assertStringNotContainsString('already running', $tester->getDisplay());
+            }
+        } finally {
+            $lock->release();
+        }
+    }
+
+    public function testGeocodeNegativeDelayStillGeocodes(): void
+    {
+        $this->seedStamp();
+        $calls = [];
+        $this->replaceGeocoder($calls);
+
+        $tester = $this->tester('app:stamps:geocode');
+        self::assertSame(Command::SUCCESS, $tester->execute([
+            '--only' => 'stamps',
+            '--delay' => '-1',
+        ]));
+
+        self::assertSame(['Praděd, Moravskoslezský kraj, Czech Republic'], $calls);
+        self::assertStringContainsString('Stamps: 1 geocoded, 0 skipped, 0 failed', $tester->getDisplay());
+    }
+
     private function tester(string $name): CommandTester
     {
         $application = new Application(self::$kernel ?? self::bootKernel());
