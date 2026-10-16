@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Service\Auth;
 
+use App\Entity\User;
 use App\Repository\UserRepository;
 use App\Security\CleartextSpentRefreshTokenRegistry;
 use Doctrine\ORM\EntityManagerInterface;
 use Gesdinet\JWTRefreshTokenBundle\Model\FamilyAwareRefreshTokenInterface;
+use Gesdinet\JWTRefreshTokenBundle\Model\RefreshTokenInterface;
 use Gesdinet\JWTRefreshTokenBundle\Model\RefreshTokenManagerInterface;
 use Gesdinet\JWTRefreshTokenBundle\Security\ReuseDetection\RefreshTokenReuseDetector;
 use Symfony\Component\HttpFoundation\RequestStack;
@@ -15,7 +17,7 @@ use Symfony\Component\HttpKernel\Exception\UnauthorizedHttpException;
 use Webmozart\Assert\Assert;
 
 /**
- * Spends a refresh token and issues its successor in the same family (GraphQL refresh).
+ * Spends a refresh token and issues its successor in the same family (GraphQL and REST refresh).
  */
 final class RefreshTokenRotator
 {
@@ -59,6 +61,16 @@ final class RefreshTokenRotator
 
         $this->tokenIssuer->assertCanAuthenticate($user);
 
+        return $this->spend($stored, $refreshTokenValue, $user);
+    }
+
+    /**
+     * Spends an already looked-up token; fails if a concurrent request spent it first.
+     *
+     * @return array{token: string, refresh_token: string}
+     */
+    public function spend(RefreshTokenInterface $stored, string $refreshTokenValue, User $user): array
+    {
         $inheritedFamily = null;
         $inheritedFamilyValid = null;
         if ($stored instanceof FamilyAwareRefreshTokenInterface) {
@@ -74,7 +86,10 @@ final class RefreshTokenRotator
             $inheritedFamilyValid,
         ): array {
             $this->spentRefreshTokens->rememberCleartext($stored, $refreshTokenValue);
-            $this->refreshTokenManager->delete($stored);
+            // A concurrent rotation already deleted the row: only one caller may spend a token.
+            if (1 !== $this->refreshTokenManager->delete($stored)) {
+                throw new UnauthorizedHttpException('Bearer', 'Invalid refresh token.');
+            }
 
             return $this->tokenIssuer->issue($user, $inheritedFamily, $inheritedFamilyValid);
         });
