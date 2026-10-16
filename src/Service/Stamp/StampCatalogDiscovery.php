@@ -73,47 +73,59 @@ final class StampCatalogDiscovery
                 $firstBucket = false;
 
                 $listener->bucketStarted($country['id'], $type['id']);
-                $page = 1;
-                while (true) {
-                    $query = http_build_query([
-                        'country' => $country['id'],
-                        'type' => $type['id'],
-                        'sorting' => 'number',
-                        'page' => $page,
-                        'rows' => self::LAZY_ROWS,
-                    ]);
-                    $payload = json_decode($this->client->get(StampWebClient::BASE_URL.'/items/lazy?'.$query, $options), true);
-                    $this->client->pause($options->delayListMs);
-
-                    Assert::isArray($payload, 'Lazy listing response must be JSON object.');
-                    $items = $payload['items'] ?? [];
-                    Assert::isArray($items);
-
-                    if ([] === $items) {
-                        break;
+                foreach ($this->discoverBucket($country['id'], $type['id'], $options) as $id) {
+                    if (isset($seen[$id])) {
+                        continue;
                     }
-
-                    foreach ($items as $item) {
-                        Assert::isArray($item);
-                        $id = $this->requireInt($item['id'] ?? null, 'Lazy item id must be integerish.');
-                        if (isset($seen[$id])) {
-                            continue;
-                        }
-                        $seen[$id] = true;
-                        $ids[] = $id;
-                    }
-
-                    $total = $this->requireInt($payload['totalRecords'] ?? 0, 'totalRecords must be integerish.');
-                    $perPage = $this->requireInt($payload['itemsPerPage'] ?? self::LAZY_ROWS, 'itemsPerPage must be integerish.');
-                    if ($perPage <= 0 || $page * $perPage >= $total) {
-                        break;
-                    }
-                    ++$page;
+                    $seen[$id] = true;
+                    $ids[] = $id;
                 }
             }
         }
 
         return $ids;
+    }
+
+    /**
+     * Pages through the lazy listing of one country × type bucket and returns its ids in listing order.
+     *
+     * @return list<int>
+     */
+    private function discoverBucket(int $countryId, int $typeId, StampWebScrapeOptions $options): array
+    {
+        $ids = [];
+        $page = 1;
+        while (true) {
+            $query = http_build_query([
+                'country' => $countryId,
+                'type' => $typeId,
+                'sorting' => 'number',
+                'page' => $page,
+                'rows' => self::LAZY_ROWS,
+            ]);
+            $payload = json_decode($this->client->get(StampWebClient::BASE_URL.'/items/lazy?'.$query, $options), true);
+            $this->client->pause($options->delayListMs);
+
+            Assert::isArray($payload, 'Lazy listing response must be JSON object.');
+            $items = $payload['items'] ?? [];
+            Assert::isArray($items);
+
+            if ([] === $items) {
+                return $ids;
+            }
+
+            foreach ($items as $item) {
+                Assert::isArray($item);
+                $ids[] = $this->requireInt($item['id'] ?? null, 'Lazy item id must be integerish.');
+            }
+
+            $total = $this->requireInt($payload['totalRecords'] ?? 0, 'totalRecords must be integerish.');
+            $perPage = $this->requireInt($payload['itemsPerPage'] ?? self::LAZY_ROWS, 'itemsPerPage must be integerish.');
+            if ($perPage <= 0 || $page * $perPage >= $total) {
+                return $ids;
+            }
+            ++$page;
+        }
     }
 
     /**
