@@ -248,4 +248,4 @@ Put real secrets in `.env.local` (git-ignored), not in committed `.env`:
 | Validation error JSON | `src/EventListener/ValidationFailedExceptionListener.php` |
 | OpenAPI auth paths | `src/OpenApi/AuthOpenApiFactory.php` |
 | Email templates | `templates/email/` |
-| Functional tests | `tests/Api/AuthTest.php`, `tests/Api/AuthGraphQlTest.php` |
+| Functional tests | REST: `tests/Api/Auth{Registration,LoginRefresh,PasswordReset,Logout}Test.php` (helpers in `AuthApiTestTrait`); GraphQL: `tests/Api/AuthGraphQl{Registration,LoginRefresh,PasswordReset,Logout,RateLimit}Test.php` (helpers in `AuthGraphQlTestTrait`) |
