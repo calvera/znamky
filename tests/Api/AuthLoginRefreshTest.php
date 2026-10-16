@@ -9,6 +9,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Safe\DateTime;
 use Safe\DateTimeImmutable;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+use Symfony\Component\BrowserKit\Cookie;
 use Symfony\Component\HttpFoundation\Response;
 
 final class AuthLoginRefreshTest extends WebTestCase
@@ -58,6 +59,25 @@ final class AuthLoginRefreshTest extends WebTestCase
             'refresh_token' => $tokens['refresh_token'],
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+    }
+
+    public function testRefreshAcceptsTheTokenOnlyFromTheJsonBody(): void
+    {
+        $email = 'refresh-body-only@example.com';
+        $this->registerAndVerify($email, 'password123');
+        $refreshToken = $this->login($email, 'password123')['refresh_token'];
+
+        // Query strings end up in access logs; cookies would be sent cross-site.
+        $this->client->request('POST', '/api/token/refresh?refresh_token='.$refreshToken);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+
+        $this->client->getCookieJar()->set(new Cookie('refresh_token', $refreshToken));
+        $this->client->request('POST', '/api/token/refresh');
+        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+        $this->client->getCookieJar()->clear();
+
+        $this->jsonRequest('POST', '/api/token/refresh', ['refresh_token' => $refreshToken]);
+        self::assertResponseIsSuccessful();
     }
 
     public function testRefreshReuseRevokesTheTokenFamily(): void

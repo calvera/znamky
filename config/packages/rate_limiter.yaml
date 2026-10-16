@@ -6,6 +6,12 @@ framework:
             limit: 10
             interval: '15 minutes'
 
+        # Reset emails per target address, so many IPs can't flood one inbox.
+        auth_reset_email:
+            policy: sliding_window
+            limit: 3
+            interval: '1 hour'
+
         # Token submit endpoints (verify-email / reset-password).
         auth_token:
             policy: sliding_window
@@ -31,6 +37,11 @@ when@test:
             auth_email:
                 policy: fixed_window
                 limit: 5
+                interval: '1 hour'
+
+            auth_reset_email:
+                policy: fixed_window
+                limit: 3
                 interval: '1 hour'
 
             auth_token:

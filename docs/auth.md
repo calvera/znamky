@@ -124,6 +124,12 @@ stored `sha256$…` digest are not accepted as credentials
 whole token family (session), for both REST and GraphQL. Replay detection uses
 `cache.app` — share that cache across replicas in a multi-instance deploy.
 
+Two concurrent refreshes of the same token cannot both succeed: whichever spends it
+second gets **401**. REST and GraphQL both rotate through `RefreshTokenRotator`
+(REST via `RotateRefreshTokenOnRefreshListener`, which replaces Gesdinet's own
+rotation). The refresh token is read from the JSON body only, never from the query
+string or a cookie (`BodyOnlyRefreshTokenExtractor`).
+
 ```http
 POST /api/token/refresh
 Content-Type: application/json
@@ -145,7 +151,9 @@ Content-Type: application/json
 Optional `locale` (`en` default, or `cs`) selects the reset email language.
 
 Always **204** (does not reveal whether the email exists). If the user exists, a
-reset token is emailed.
+reset token is emailed. A failed send is logged, not reported, and keeps the
+previous reset token valid. After 3 requests per address per hour, further requests
+still return 204 but send nothing (`auth_reset_email`).
 
 ```http
 POST /api/reset-password
@@ -215,6 +223,7 @@ Password minimum length is **8** characters.
 | Endpoint | Limiter | Default |
 |----------|---------|---------|
 | `POST /api/register`, `POST /api/forgot-password` | `auth_email` | 10 / 15 minutes per IP |
+| `POST /api/forgot-password`, GraphQL `forgotPasswordUser` | `auth_reset_email` | 3 / hour per email address; over the limit still **204**, no email |
 | `POST /api/verify-email`, `POST /api/reset-password` | `auth_token` | 20 / 15 minutes per IP |
 | `POST /api/login`, GraphQL `loginUser` | login throttling (`username+IP` + `IP`) | 5 / 5 minutes per username+IP; 50 / 15 minutes per IP. Only failed attempts consume the IP budget. |
 

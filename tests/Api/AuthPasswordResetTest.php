@@ -6,29 +6,17 @@ namespace App\Tests\Api;
 
 use App\Entity\User;
 use App\Repository\UserRepository;
-use App\Service\Auth\AuthMailer;
-use App\Service\Auth\EmailTokenLookup;
-use App\Service\Auth\PasswordResetService;
-use App\Service\Auth\TokenHasher;
-use Doctrine\ORM\EntityManagerInterface;
-use Gesdinet\JWTRefreshTokenBundle\Model\RevokeRefreshTokenManagerInterface;
 use Safe\DateTimeImmutable;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
-use Symfony\Component\Clock\Clock;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\Mailer\Envelope;
-use Symfony\Component\Mailer\Exception\TransportException;
-use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Mime\Email;
-use Symfony\Component\Mime\RawMessage;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
-use Symfony\Contracts\Translation\TranslatorInterface;
 
 final class AuthPasswordResetTest extends WebTestCase
 {
     use AuthApiTestTrait;
 
-    public function testFailedPasswordResetEmailDoesNotInvalidateThePreviousToken(): void
+    public function testFailedPasswordResetEmailReturns204AndKeepsThePreviousToken(): void
     {
         $email = 'reset-smtp@example.com';
         $this->registerAndVerify($email, 'password123');
@@ -37,27 +25,13 @@ final class AuthPasswordResetTest extends WebTestCase
         self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
         $token = $this->extractTokenFromLastEmail();
 
-        $reset = new PasswordResetService(
-            static::getContainer()->get(UserRepository::class),
-            static::getContainer()->get(EntityManagerInterface::class),
-            static::getContainer()->get(TokenHasher::class),
-            static::getContainer()->get(EmailTokenLookup::class),
-            new AuthMailer(new class implements MailerInterface {
-                public function send(RawMessage $message, ?Envelope $envelope = null): void
-                {
-                    throw new TransportException('SMTP down');
-                }
-            }, static::getContainer()->get(TranslatorInterface::class), 'noreply@znamky.local'),
-            static::getContainer()->get(UserPasswordHasherInterface::class),
-            static::getContainer()->get(RevokeRefreshTokenManagerInterface::class),
-            new Clock(),
-        );
+        static::ensureKernelShutdown();
+        $this->client = static::createClient();
+        $this->installThrowingMailer();
 
-        try {
-            $reset->requestReset($email);
-            self::fail('A mail transport failure was expected.');
-        } catch (TransportException) {
-        }
+        // Same 204 as an unknown address: a 500 here would reveal that the account exists.
+        $this->jsonRequest('POST', '/api/forgot-password', ['email' => $email]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
 
         static::ensureKernelShutdown();
         $this->client = static::createClient();
@@ -189,6 +163,29 @@ final class AuthPasswordResetTest extends WebTestCase
             'refresh_token' => $tokens['refresh_token'],
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+    }
+
+    public function testForgotPasswordStopsMailingOneAddressAfterLimitButStillReturns204(): void
+    {
+        $email = 'reset-flood@example.com';
+        $this->registerAndVerify($email, 'password123');
+
+        for ($i = 1; $i <= 3; ++$i) {
+            $this->jsonRequest('POST', '/api/forgot-password', ['email' => $email]);
+            self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+            self::assertEmailCount(1, message: sprintf('request %d should send a reset email', $i));
+        }
+        $latestToken = $this->extractTokenFromLastEmail();
+
+        $this->jsonRequest('POST', '/api/forgot-password', ['email' => strtoupper($email)]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+        self::assertEmailCount(0);
+
+        $this->jsonRequest('POST', '/api/reset-password', [
+            'token' => $latestToken,
+            'password' => 'newpassword456',
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
     }
 
     public function testForgotUnknownEmailStillReturns204(): void
