@@ -19,7 +19,7 @@ final class AuthLoginRefreshTest extends WebTestCase
     public function testLoginAcceptsEmailCasingUsedAtRegistration(): void
     {
         $email = 'Alice.Smith@Example.com';
-        $password = 'password123';
+        $password = 'Blue-Otter-Canoe-77';
         $this->registerAndVerify($email, $password);
 
         $tokens = $this->login($email, $password);
@@ -43,7 +43,7 @@ final class AuthLoginRefreshTest extends WebTestCase
     public function testRefreshRotatesToken(): void
     {
         $email = 'refresh@example.com';
-        $password = 'password123';
+        $password = 'Blue-Otter-Canoe-77';
         $this->registerAndVerify($email, $password);
         $tokens = $this->login($email, $password);
 
@@ -64,8 +64,8 @@ final class AuthLoginRefreshTest extends WebTestCase
     public function testRefreshAcceptsTheTokenOnlyFromTheJsonBody(): void
     {
         $email = 'refresh-body-only@example.com';
-        $this->registerAndVerify($email, 'password123');
-        $refreshToken = $this->login($email, 'password123')['refresh_token'];
+        $this->registerAndVerify($email, 'Blue-Otter-Canoe-77');
+        $refreshToken = $this->login($email, 'Blue-Otter-Canoe-77')['refresh_token'];
 
         // Query strings end up in access logs; cookies would be sent cross-site.
         $this->client->request('POST', '/api/token/refresh?refresh_token='.$refreshToken);
@@ -82,8 +82,8 @@ final class AuthLoginRefreshTest extends WebTestCase
 
     public function testRefreshReuseRevokesTheTokenFamily(): void
     {
-        $this->registerAndVerify('refresh-reuse@example.com', 'password123');
-        $tokens = $this->login('refresh-reuse@example.com', 'password123');
+        $this->registerAndVerify('refresh-reuse@example.com', 'Blue-Otter-Canoe-77');
+        $tokens = $this->login('refresh-reuse@example.com', 'Blue-Otter-Canoe-77');
 
         $this->jsonRequest('POST', '/api/token/refresh', [
             'refresh_token' => $tokens['refresh_token'],
@@ -108,7 +108,7 @@ final class AuthLoginRefreshTest extends WebTestCase
     public function testRefreshReuseDoesNotRevokeAnotherSessionsAccessToken(): void
     {
         $email = 'reuse-other-session@example.com';
-        $password = 'password123';
+        $password = 'Blue-Otter-Canoe-77';
         $this->registerAndVerify($email, $password);
         $replayed = $this->login($email, $password);
         $other = $this->login($email, $password);
@@ -145,8 +145,8 @@ final class AuthLoginRefreshTest extends WebTestCase
     public function testStoredRefreshTokenDigestCannotBeUsedToRefresh(): void
     {
         $email = 'digest-refresh@example.com';
-        $this->registerAndVerify($email, 'password123');
-        $tokens = $this->login($email, 'password123');
+        $this->registerAndVerify($email, 'Blue-Otter-Canoe-77');
+        $tokens = $this->login($email, 'Blue-Otter-Canoe-77');
 
         $stored = $this->storedRefreshTokenFor($email);
         self::assertNotSame($tokens['refresh_token'], $stored);
@@ -166,7 +166,7 @@ final class AuthLoginRefreshTest extends WebTestCase
     public function testCleartextRefreshTokenRowCannotBeUsedToRefresh(): void
     {
         $email = 'cleartext-refresh@example.com';
-        $this->registerAndVerify($email, 'password123');
+        $this->registerAndVerify($email, 'Blue-Otter-Canoe-77');
         $cleartext = bin2hex(random_bytes(64));
 
         /** @var EntityManagerInterface $em */
@@ -187,8 +187,8 @@ final class AuthLoginRefreshTest extends WebTestCase
     public function testIssuedRefreshTokenIsStoredAsADigest(): void
     {
         $email = 'hashed-refresh@example.com';
-        $this->registerAndVerify($email, 'password123');
-        $tokens = $this->login($email, 'password123');
+        $this->registerAndVerify($email, 'Blue-Otter-Canoe-77');
+        $tokens = $this->login($email, 'Blue-Otter-Canoe-77');
 
         $stored = $this->storedRefreshTokenFor($email);
         self::assertSame('sha256$'.hash('sha256', $tokens['refresh_token']), $stored);
@@ -216,7 +216,7 @@ final class AuthLoginRefreshTest extends WebTestCase
 
         $this->jsonRequest('POST', '/api/verify-email', [
             'token' => $this->extractTokenFromLastEmail(),
-            'password' => 'password123',
+            'password' => 'Blue-Otter-Canoe-77',
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
 
@@ -235,7 +235,7 @@ final class AuthLoginRefreshTest extends WebTestCase
     public function testRefreshRejectsUnverifiedAccountWithoutConsumingTheToken(): void
     {
         $email = 'unverified-refresh@example.com';
-        $password = 'password123';
+        $password = 'Blue-Otter-Canoe-77';
         $this->registerAndVerify($email, $password);
         $tokens = $this->login($email, $password);
 
@@ -267,8 +267,8 @@ final class AuthLoginRefreshTest extends WebTestCase
     public function testRefreshDoesNotIssueAUsableTokenPastTheFamilyDeadline(): void
     {
         $email = 'family-deadline@example.com';
-        $this->registerAndVerify($email, 'password123');
-        $tokens = $this->login($email, 'password123');
+        $this->registerAndVerify($email, 'Blue-Otter-Canoe-77');
+        $tokens = $this->login($email, 'Blue-Otter-Canoe-77');
 
         $stored = $this->refreshTokenEntity($email);
         $family = $stored->getFamily();
@@ -301,8 +301,8 @@ final class AuthLoginRefreshTest extends WebTestCase
     public function testRefreshKeepsTheTtlWhenTheFamilyDeadlineIsLater(): void
     {
         $email = 'family-ttl@example.com';
-        $this->registerAndVerify($email, 'password123');
-        $tokens = $this->login($email, 'password123');
+        $this->registerAndVerify($email, 'Blue-Otter-Canoe-77');
+        $tokens = $this->login($email, 'Blue-Otter-Canoe-77');
 
         $stored = $this->refreshTokenEntity($email);
         $originalValid = $stored->getValid();

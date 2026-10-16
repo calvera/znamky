@@ -10,6 +10,7 @@ RUN install-php-extensions \
 	intl \
 	opcache \
 	pdo_pgsql \
+	redis \
 	zip
 
 ENV COMPOSER_ALLOW_SUPERUSER=1

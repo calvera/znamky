@@ -14,7 +14,7 @@ final class AuthLogoutTest extends WebTestCase
     public function testLogoutBlocksAccessAndRefresh(): void
     {
         $email = 'logout@example.com';
-        $password = 'password123';
+        $password = 'Blue-Otter-Canoe-77';
         $this->registerAndVerify($email, $password);
         $tokens = $this->login($email, $password);
 
@@ -43,7 +43,7 @@ final class AuthLogoutTest extends WebTestCase
     public function testLogoutOfOneSessionLeavesTheOtherAccessTokenValid(): void
     {
         $email = 'logout-one@example.com';
-        $password = 'password123';
+        $password = 'Blue-Otter-Canoe-77';
         $this->registerAndVerify($email, $password);
         $first = $this->login($email, $password);
         $second = $this->login($email, $password);
@@ -78,7 +78,7 @@ final class AuthLogoutTest extends WebTestCase
     public function testLogoutWithoutRefreshTokenRevokesEverySession(): void
     {
         $email = 'logout-all@example.com';
-        $password = 'password123';
+        $password = 'Blue-Otter-Canoe-77';
         $this->registerAndVerify($email, $password);
         $first = $this->login($email, $password);
         $second = $this->login($email, $password);
@@ -118,7 +118,7 @@ final class AuthLogoutTest extends WebTestCase
     public function testLogoutWithEmptyRefreshTokenRevokesEverySession(): void
     {
         $email = 'logout-empty@example.com';
-        $password = 'password123';
+        $password = 'Blue-Otter-Canoe-77';
         $this->registerAndVerify($email, $password);
         $first = $this->login($email, $password);
         $second = $this->login($email, $password);
@@ -148,7 +148,7 @@ final class AuthLogoutTest extends WebTestCase
     public function testLogoutWithUnknownRefreshTokenLeavesTheOtherSession(): void
     {
         $email = 'logout-unknown-refresh@example.com';
-        $password = 'password123';
+        $password = 'Blue-Otter-Canoe-77';
         $this->registerAndVerify($email, $password);
         $first = $this->login($email, $password);
         $second = $this->login($email, $password);
@@ -187,9 +187,9 @@ final class AuthLogoutTest extends WebTestCase
 
     public function testLogoutWithForeignRefreshTokenDoesNotRevokeOtherSession(): void
     {
-        $this->registerAndVerify('owner@example.com', 'password123');
-        $ownerFirst = $this->login('owner@example.com', 'password123');
-        $ownerSecond = $this->login('owner@example.com', 'password123');
+        $this->registerAndVerify('owner@example.com', 'Blue-Otter-Canoe-77');
+        $ownerFirst = $this->login('owner@example.com', 'Blue-Otter-Canoe-77');
+        $ownerSecond = $this->login('owner@example.com', 'Blue-Otter-Canoe-77');
 
         $this->jsonRequest('POST', '/api/register', [
             'email' => 'other@example.com',
@@ -197,10 +197,10 @@ final class AuthLogoutTest extends WebTestCase
         self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
         $this->jsonRequest('POST', '/api/verify-email', [
             'token' => $this->extractTokenFromLastEmail(),
-            'password' => 'password123',
+            'password' => 'Blue-Otter-Canoe-77',
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
-        $other = $this->login('other@example.com', 'password123');
+        $other = $this->login('other@example.com', 'Blue-Otter-Canoe-77');
 
         $this->client->request(
             'POST',

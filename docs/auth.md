@@ -53,7 +53,7 @@ mutation {
 }
 
 mutation {
-  loginUser(input: { email: "user@example.com", password: "password123" }) {
+  loginUser(input: { email: "user@example.com", password: "Blue-Otter-Canoe-77" }) {
     user { token refreshToken }
   }
 }
@@ -94,7 +94,7 @@ owner chooses the credential that can authenticate.
 POST /api/verify-email
 Content-Type: application/json
 
-{"token":"<token-from-email>","password":"password123"}
+{"token":"<token-from-email>","password":"Blue-Otter-Canoe-77"}
 ```
 
 **204** on success.
@@ -103,7 +103,7 @@ Content-Type: application/json
 POST /api/login
 Content-Type: application/json
 
-{"email":"user@example.com","password":"password123"}
+{"email":"user@example.com","password":"Blue-Otter-Canoe-77"}
 ```
 
 **200** `{ "token": "<jwt>", "refresh_token": "<refresh>" }`.
@@ -126,7 +126,7 @@ token is invalid. Tokens are stored hashed (`hash_tokens`); cleartext rows and t
 stored `sha256$…` digest are not accepted as credentials
 (`accept_stored_in_the_clear: false`). Replaying a spent refresh token revokes the
 whole token family (session), for both REST and GraphQL. Replay detection uses
-`cache.app` — share that cache across replicas in a multi-instance deploy.
+`cache.app`, which is Redis in prod (`REDIS_URL`) so all replicas share it.
 
 Two concurrent refreshes of the same token cannot both succeed: whichever spends it
 second gets **401**. REST and GraphQL both rotate through `RefreshTokenRotator`
@@ -163,7 +163,7 @@ still return 204 but send nothing (`auth_reset_email`).
 POST /api/reset-password
 Content-Type: application/json
 
-{"token":"<token-from-email>","password":"newpassword123"}
+{"token":"<token-from-email>","password":"Brand-New-Kayak-58"}
 ```
 
 **204** on success. All refresh tokens for the user are revoked, and JWTs issued
@@ -220,7 +220,7 @@ Every other `/api` error is rendered by API Platform as `application/problem+jso
 `Accept: application/ld+json` gets the Hydra variant).
 - Rate limit exceeded on public auth endpoints: **429** (`Retry-After` header)
 
-Password minimum length is **8** characters.
+Passwords set at verify-email or reset need at least **8** characters and **medium** strength (`#[Assert\PasswordStrength]`, Symfony's default); otherwise **422** with a `password` violation. Login does not check strength, so existing passwords keep working.
 
 ## Rate limiting
 

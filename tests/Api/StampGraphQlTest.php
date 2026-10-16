@@ -262,7 +262,7 @@ final class StampGraphQlTest extends WebTestCase
     private function authenticate(): string
     {
         $email = 'graphql@example.com';
-        $password = 'password123';
+        $password = 'Blue-Otter-Canoe-77';
 
         $this->jsonRequest('POST', '/api/register', [
             'email' => $email,

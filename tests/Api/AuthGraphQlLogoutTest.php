@@ -14,7 +14,7 @@ final class AuthGraphQlLogoutTest extends WebTestCase
     public function testLogoutWithoutRefreshTokenRevokesEverySessionButNotOtherAccounts(): void
     {
         $owner = 'graphql-logout-all@example.com';
-        $password = 'password123';
+        $password = 'Blue-Otter-Canoe-77';
         $first = $this->registerVerifyAndLogin($owner, $password);
         $second = $this->tokensFromLogin($this->loginMutation($owner, $password));
         $other = $this->registerVerifyAndLogin('graphql-logout-other@example.com', $password);
@@ -78,7 +78,7 @@ final class AuthGraphQlLogoutTest extends WebTestCase
     public function testLogoutOfOneSessionLeavesTheOtherAccessTokenValid(): void
     {
         $email = 'graphql-logout-one@example.com';
-        $password = 'password123';
+        $password = 'Blue-Otter-Canoe-77';
         $first = $this->registerVerifyAndLogin($email, $password);
         $second = $this->tokensFromLogin($this->loginMutation($email, $password));
 

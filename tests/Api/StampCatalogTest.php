@@ -332,7 +332,7 @@ final class StampCatalogTest extends WebTestCase
     private function authenticate(): string
     {
         $email = 'stamps@example.com';
-        $password = 'password123';
+        $password = 'Blue-Otter-Canoe-77';
 
         $this->jsonRequest('POST', '/api/register', [
             'email' => $email,

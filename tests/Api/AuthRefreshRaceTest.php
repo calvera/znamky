@@ -25,8 +25,8 @@ final class AuthRefreshRaceTest extends WebTestCase
     public function testConcurrentRefreshOfOneTokenIssuesOnlyOnePair(): void
     {
         $email = 'rest-refresh-race@example.com';
-        $this->registerAndVerify($email, 'password123');
-        $refreshToken = $this->login($email, 'password123')['refresh_token'];
+        $this->registerAndVerify($email, 'Blue-Otter-Canoe-77');
+        $refreshToken = $this->login($email, 'Blue-Otter-Canoe-77')['refresh_token'];
 
         $competitorStatus = null;
         $this->client->disableReboot();

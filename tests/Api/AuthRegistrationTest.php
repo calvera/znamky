@@ -40,16 +40,16 @@ final class AuthRegistrationTest extends WebTestCase
 
         $this->jsonRequest('POST', '/api/verify-email', [
             'token' => $this->extractTokenFromLastEmail(),
-            'password' => 'password123',
+            'password' => 'Blue-Otter-Canoe-77',
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
-        $this->login('smtp-down@example.com', 'password123');
+        $this->login('smtp-down@example.com', 'Blue-Otter-Canoe-77');
     }
 
     public function testRegisterVerifyLoginAndMe(): void
     {
         $email = 'user@example.com';
-        $password = 'password123';
+        $password = 'Blue-Otter-Canoe-77';
 
         $this->jsonRequest('POST', '/api/register', [
             'email' => $email,
@@ -179,16 +179,16 @@ final class AuthRegistrationTest extends WebTestCase
 
         $this->jsonRequest('POST', '/api/verify-email', [
             'token' => $oldToken,
-            'password' => 'password123',
+            'password' => 'Blue-Otter-Canoe-77',
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
 
         $this->jsonRequest('POST', '/api/verify-email', [
             'token' => $newToken,
-            'password' => 'password123',
+            'password' => 'Blue-Otter-Canoe-77',
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
-        $this->login($emailAddress, 'password123');
+        $this->login($emailAddress, 'Blue-Otter-Canoe-77');
     }
 
     public function testRegisterDuplicateEmailReturns422(): void
@@ -199,7 +199,7 @@ final class AuthRegistrationTest extends WebTestCase
         $token = $this->extractTokenFromLastEmail();
         $this->jsonRequest('POST', '/api/verify-email', [
             'token' => $token,
-            'password' => 'password123',
+            'password' => 'Blue-Otter-Canoe-77',
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
 
@@ -232,7 +232,7 @@ final class AuthRegistrationTest extends WebTestCase
     public function testStaleBearerDoesNotBlockPublicRegister(): void
     {
         $email = 'stale-bearer@example.com';
-        $password = 'password123';
+        $password = 'Blue-Otter-Canoe-77';
         $this->registerAndVerify($email, $password);
         $tokens = $this->login($email, $password);
 
@@ -268,7 +268,7 @@ final class AuthRegistrationTest extends WebTestCase
     {
         $this->jsonRequest('POST', '/api/verify-email', [
             'token' => 'invalid-token',
-            'password' => 'password123',
+            'password' => 'Blue-Otter-Canoe-77',
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
     }
@@ -341,7 +341,7 @@ final class AuthRegistrationTest extends WebTestCase
     public function testVerifyWithoutPasswordLeavesAccountUnverified(): void
     {
         $email = 'pending@example.com';
-        $password = 'password123';
+        $password = 'Blue-Otter-Canoe-77';
 
         $this->jsonRequest('POST', '/api/register', [
             'email' => $email,
@@ -371,7 +371,7 @@ final class AuthRegistrationTest extends WebTestCase
 
         $this->jsonRequest('POST', '/api/verify-email', [
             'token' => $token,
-            'password' => 'password123',
+            'password' => 'Blue-Otter-Canoe-77',
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
 
@@ -380,7 +380,7 @@ final class AuthRegistrationTest extends WebTestCase
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
 
-        $tokens = $this->login('user@example.com', 'password123');
+        $tokens = $this->login('user@example.com', 'Blue-Otter-Canoe-77');
         $this->client->request('GET', '/api/me', server: [
             'HTTP_AUTHORIZATION' => 'Bearer '.$tokens['token'],
         ]);
@@ -392,7 +392,7 @@ final class AuthRegistrationTest extends WebTestCase
     public function testExpiredVerificationCanBeReclaimedByRegisteringAgain(): void
     {
         $email = 'reclaim-verify@example.com';
-        $password = 'password123';
+        $password = 'Blue-Otter-Canoe-77';
 
         $this->jsonRequest('POST', '/api/register', ['email' => $email]);
         self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
@@ -423,7 +423,7 @@ final class AuthRegistrationTest extends WebTestCase
     public function testReregisteringUnverifiedAccountRotatesTheLiveToken(): void
     {
         $email = 'reclaim-live@example.com';
-        $password = 'password123';
+        $password = 'Blue-Otter-Canoe-77';
 
         $this->jsonRequest('POST', '/api/register', ['email' => $email]);
         self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
@@ -453,7 +453,7 @@ final class AuthRegistrationTest extends WebTestCase
     public function testFailedReissueEmailKeepsThePreviousVerificationToken(): void
     {
         $email = 'reissue-smtp@example.com';
-        $password = 'password123';
+        $password = 'Blue-Otter-Canoe-77';
 
         $this->jsonRequest('POST', '/api/register', ['email' => $email]);
         self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
@@ -480,7 +480,7 @@ final class AuthRegistrationTest extends WebTestCase
     public function testExpiredVerificationTokenDoesNotVerifyUser(): void
     {
         $email = 'expired-verify@example.com';
-        $password = 'password123';
+        $password = 'Blue-Otter-Canoe-77';
         $this->jsonRequest('POST', '/api/register', [
             'email' => $email,
         ]);
@@ -504,7 +504,7 @@ final class AuthRegistrationTest extends WebTestCase
     public function testVerificationTokenCannotBeReused(): void
     {
         $email = 'reuse-verify@example.com';
-        $password = 'password123';
+        $password = 'Blue-Otter-Canoe-77';
         $this->jsonRequest('POST', '/api/register', [
             'email' => $email,
         ]);
@@ -535,7 +535,7 @@ final class AuthRegistrationTest extends WebTestCase
         self::mockTime('+25 hours');
         $this->jsonRequest('POST', '/api/verify-email', [
             'token' => $this->extractTokenFromLastEmail(),
-            'password' => 'password123',
+            'password' => 'Blue-Otter-Canoe-77',
         ]);
         $this->assertJsonError(Response::HTTP_UNPROCESSABLE_ENTITY, 'Verification token has expired.');
     }
@@ -544,7 +544,7 @@ final class AuthRegistrationTest extends WebTestCase
     {
         $this->jsonRequest('POST', '/api/verify-email', [
             'token' => 'invalid-token',
-            'password' => 'password123',
+            'password' => 'Blue-Otter-Canoe-77',
         ]);
         $this->assertJsonError(Response::HTTP_UNPROCESSABLE_ENTITY, 'Invalid verification token.');
     }
@@ -559,15 +559,30 @@ final class AuthRegistrationTest extends WebTestCase
 
         $this->jsonRequest('POST', '/api/verify-email', [
             'token' => $token,
-            'password' => 'password123',
+            'password' => 'Blue-Otter-Canoe-77',
         ]);
         $this->assertJsonError(Response::HTTP_UNPROCESSABLE_ENTITY, 'Verification token has expired.');
+    }
+
+    public function testWeakVerificationPasswordIsRejected(): void
+    {
+        $this->jsonRequest('POST', '/api/register', ['email' => 'weak-verify@example.com']);
+        self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
+
+        $this->jsonRequest('POST', '/api/verify-email', [
+            'token' => $this->extractTokenFromLastEmail(),
+            'password' => 'qwerty12345',
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
+        $violations = $this->jsonResponse()['violations'] ?? null;
+        self::assertIsArray($violations);
+        self::assertContains('password', array_column($violations, 'propertyPath'));
     }
 
     public function testShortVerificationPasswordDoesNotConsumeTheToken(): void
     {
         $email = 'short-verify@example.com';
-        $password = 'password123';
+        $password = 'Blue-Otter-Canoe-77';
         $this->jsonRequest('POST', '/api/register', [
             'email' => $email,
         ]);
@@ -604,7 +619,7 @@ final class AuthRegistrationTest extends WebTestCase
     public function testVerificationTokenWithoutExpiryDoesNotVerifyOrGetConsumed(): void
     {
         $email = 'null-expiry-verify@example.com';
-        $password = 'password123';
+        $password = 'Blue-Otter-Canoe-77';
         $this->jsonRequest('POST', '/api/register', [
             'email' => $email,
         ]);

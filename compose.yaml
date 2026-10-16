@@ -20,6 +20,13 @@ services:
       # - ./docker/db/data:/var/lib/postgresql:rw
 ###< doctrine/doctrine-bundle ###
 
+  redis:
+    image: redis:8-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      timeout: 5s
+      retries: 5
+
 volumes:
 ###> doctrine/doctrine-bundle ###
   database_data:

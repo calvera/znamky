@@ -93,7 +93,7 @@ final class AuthGraphQlRegistrationTest extends WebTestCase
     public function testRegisterVerifyLoginMeAndLogout(): void
     {
         $email = 'graphql-auth@example.com';
-        $password = 'password123';
+        $password = 'Blue-Otter-Canoe-77';
 
         $register = $this->graphql(<<<'GRAPHQL'
             mutation($email: String!) {
@@ -208,7 +208,7 @@ final class AuthGraphQlRegistrationTest extends WebTestCase
     public function testStaleBearerDoesNotBlockPublicAuthMutations(): void
     {
         $email = 'graphql-stale-bearer@example.com';
-        $password = 'password123';
+        $password = 'Blue-Otter-Canoe-77';
         $tokens = $this->registerVerifyAndLogin($email, $password);
         $staleJwt = 'not-a-valid-jwt';
 
@@ -353,7 +353,7 @@ final class AuthGraphQlRegistrationTest extends WebTestCase
     public function testDuplicateRegistrationReturnsValidationError(): void
     {
         $email = 'graphql-dup@example.com';
-        $password = 'password123';
+        $password = 'Blue-Otter-Canoe-77';
 
         $first = $this->graphql(<<<'GRAPHQL'
             mutation($email: String!) {
@@ -403,7 +403,7 @@ final class AuthGraphQlRegistrationTest extends WebTestCase
     public function testShortVerificationPasswordDoesNotConsumeTheToken(): void
     {
         $email = 'graphql-short-verify@example.com';
-        $password = 'password123';
+        $password = 'Blue-Otter-Canoe-77';
 
         $this->graphql(<<<'GRAPHQL'
             mutation($email: String!) {

@@ -19,7 +19,7 @@ final class AuthPasswordResetTest extends WebTestCase
     public function testFailedPasswordResetEmailReturns204AndKeepsThePreviousToken(): void
     {
         $email = 'reset-smtp@example.com';
-        $this->registerAndVerify($email, 'password123');
+        $this->registerAndVerify($email, 'Blue-Otter-Canoe-77');
 
         $this->jsonRequest('POST', '/api/forgot-password', ['email' => $email]);
         self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
@@ -38,16 +38,16 @@ final class AuthPasswordResetTest extends WebTestCase
 
         $this->jsonRequest('POST', '/api/reset-password', [
             'token' => $token,
-            'password' => 'newpassword456',
+            'password' => 'Brand-New-Kayak-58',
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
-        $this->login($email, 'newpassword456');
+        $this->login($email, 'Brand-New-Kayak-58');
     }
 
     public function testForgotPasswordEmailUsesCzechLocale(): void
     {
         $emailAddress = 'reset-locale-cs@example.com';
-        $this->registerAndVerify($emailAddress, 'password123');
+        $this->registerAndVerify($emailAddress, 'Blue-Otter-Canoe-77');
 
         $this->jsonRequest('POST', '/api/forgot-password', [
             'email' => $emailAddress,
@@ -74,7 +74,7 @@ final class AuthPasswordResetTest extends WebTestCase
     public function testForgotPasswordEmailDefaultsToEnglish(): void
     {
         $emailAddress = 'reset-locale-en@example.com';
-        $this->registerAndVerify($emailAddress, 'password123');
+        $this->registerAndVerify($emailAddress, 'Blue-Otter-Canoe-77');
 
         $this->jsonRequest('POST', '/api/forgot-password', [
             'email' => $emailAddress,
@@ -100,7 +100,7 @@ final class AuthPasswordResetTest extends WebTestCase
     public function testForgotPasswordInvalidLocaleDoesNotReplaceTheResetToken(): void
     {
         $emailAddress = 'reset-locale-keep@example.com';
-        $this->registerAndVerify($emailAddress, 'password123');
+        $this->registerAndVerify($emailAddress, 'Blue-Otter-Canoe-77');
 
         $this->jsonRequest('POST', '/api/forgot-password', [
             'email' => $emailAddress,
@@ -117,10 +117,10 @@ final class AuthPasswordResetTest extends WebTestCase
 
         $this->jsonRequest('POST', '/api/reset-password', [
             'token' => $token,
-            'password' => 'newpassword456',
+            'password' => 'Brand-New-Kayak-58',
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
-        $this->login($emailAddress, 'newpassword456');
+        $this->login($emailAddress, 'Brand-New-Kayak-58');
     }
 
     public function testForgotPasswordInvalidLocaleReturns422(): void
@@ -135,8 +135,8 @@ final class AuthPasswordResetTest extends WebTestCase
     public function testForgotAndResetPassword(): void
     {
         $email = 'reset@example.com';
-        $oldPassword = 'password123';
-        $newPassword = 'newpassword456';
+        $oldPassword = 'Blue-Otter-Canoe-77';
+        $newPassword = 'Brand-New-Kayak-58';
         $this->registerAndVerify($email, $oldPassword);
         $tokens = $this->login($email, $oldPassword);
 
@@ -168,7 +168,7 @@ final class AuthPasswordResetTest extends WebTestCase
     public function testForgotPasswordStopsMailingOneAddressAfterLimitButStillReturns204(): void
     {
         $email = 'reset-flood@example.com';
-        $this->registerAndVerify($email, 'password123');
+        $this->registerAndVerify($email, 'Blue-Otter-Canoe-77');
 
         for ($i = 1; $i <= 3; ++$i) {
             $this->jsonRequest('POST', '/api/forgot-password', ['email' => $email]);
@@ -183,7 +183,7 @@ final class AuthPasswordResetTest extends WebTestCase
 
         $this->jsonRequest('POST', '/api/reset-password', [
             'token' => $latestToken,
-            'password' => 'newpassword456',
+            'password' => 'Brand-New-Kayak-58',
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
     }
@@ -199,7 +199,7 @@ final class AuthPasswordResetTest extends WebTestCase
     {
         $this->jsonRequest('POST', '/api/reset-password', [
             'token' => 'not-a-real-token',
-            'password' => 'newpassword456',
+            'password' => 'Brand-New-Kayak-58',
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
     }
@@ -207,8 +207,8 @@ final class AuthPasswordResetTest extends WebTestCase
     public function testExpiredPasswordResetTokenKeepsOldPassword(): void
     {
         $email = 'expired-reset@example.com';
-        $oldPassword = 'password123';
-        $newPassword = 'newpassword456';
+        $oldPassword = 'Blue-Otter-Canoe-77';
+        $newPassword = 'Brand-New-Kayak-58';
         $this->registerAndVerify($email, $oldPassword);
 
         $this->jsonRequest('POST', '/api/forgot-password', ['email' => $email]);
@@ -234,7 +234,7 @@ final class AuthPasswordResetTest extends WebTestCase
     public function testPasswordResetTokenExpiresByTheApplicationClock(): void
     {
         $email = 'clock-reset@example.com';
-        $oldPassword = 'password123';
+        $oldPassword = 'Blue-Otter-Canoe-77';
         $this->registerAndVerify($email, $oldPassword);
 
         $this->jsonRequest('POST', '/api/forgot-password', ['email' => $email]);
@@ -243,7 +243,7 @@ final class AuthPasswordResetTest extends WebTestCase
         self::mockTime('+61 minutes');
         $this->jsonRequest('POST', '/api/reset-password', [
             'token' => $this->extractTokenFromLastEmail(),
-            'password' => 'newpassword456',
+            'password' => 'Brand-New-Kayak-58',
         ]);
         $this->assertJsonError(Response::HTTP_UNPROCESSABLE_ENTITY, 'Password reset token has expired.');
 
@@ -254,7 +254,7 @@ final class AuthPasswordResetTest extends WebTestCase
     {
         $this->jsonRequest('POST', '/api/reset-password', [
             'token' => 'invalid-token',
-            'password' => 'newpassword456',
+            'password' => 'Brand-New-Kayak-58',
         ]);
         $this->assertJsonError(Response::HTTP_UNPROCESSABLE_ENTITY, 'Invalid password reset token.');
     }
@@ -262,7 +262,7 @@ final class AuthPasswordResetTest extends WebTestCase
     public function testExpiredPasswordResetTokenReturnsJsonError(): void
     {
         $email = 'json-expired-reset@example.com';
-        $this->registerAndVerify($email, 'password123');
+        $this->registerAndVerify($email, 'Blue-Otter-Canoe-77');
         $this->jsonRequest('POST', '/api/forgot-password', ['email' => $email]);
         self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
         $token = $this->extractTokenFromLastEmail();
@@ -270,7 +270,7 @@ final class AuthPasswordResetTest extends WebTestCase
 
         $this->jsonRequest('POST', '/api/reset-password', [
             'token' => $token,
-            'password' => 'newpassword456',
+            'password' => 'Brand-New-Kayak-58',
         ]);
         $this->assertJsonError(Response::HTTP_UNPROCESSABLE_ENTITY, 'Password reset token has expired.');
     }
@@ -278,7 +278,7 @@ final class AuthPasswordResetTest extends WebTestCase
     public function testExpiredPasswordResetDoesNotRevokeOutstandingAccessTokens(): void
     {
         $email = 'expired-reset-session@example.com';
-        $password = 'password123';
+        $password = 'Blue-Otter-Canoe-77';
         $this->registerAndVerify($email, $password);
         $tokens = $this->login($email, $password);
 
@@ -289,7 +289,7 @@ final class AuthPasswordResetTest extends WebTestCase
 
         $this->jsonRequest('POST', '/api/reset-password', [
             'token' => $token,
-            'password' => 'newpassword456',
+            'password' => 'Brand-New-Kayak-58',
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
 
@@ -307,9 +307,9 @@ final class AuthPasswordResetTest extends WebTestCase
     public function testPasswordResetTokenCannotBeReused(): void
     {
         $email = 'reuse-reset@example.com';
-        $oldPassword = 'password123';
-        $newPassword = 'newpassword456';
-        $otherPassword = 'otherpassword789';
+        $oldPassword = 'Blue-Otter-Canoe-77';
+        $newPassword = 'Brand-New-Kayak-58';
+        $otherPassword = 'Other-Pebble-Sonar-94';
         $this->registerAndVerify($email, $oldPassword);
 
         $this->jsonRequest('POST', '/api/forgot-password', ['email' => $email]);
@@ -340,8 +340,8 @@ final class AuthPasswordResetTest extends WebTestCase
     public function testNewerPasswordResetRequestInvalidatesPreviousToken(): void
     {
         $email = 'rotate-reset@example.com';
-        $oldPassword = 'password123';
-        $newPassword = 'newpassword456';
+        $oldPassword = 'Blue-Otter-Canoe-77';
+        $newPassword = 'Brand-New-Kayak-58';
         $this->registerAndVerify($email, $oldPassword);
 
         $this->jsonRequest('POST', '/api/forgot-password', ['email' => $email]);
@@ -370,8 +370,8 @@ final class AuthPasswordResetTest extends WebTestCase
 
     public function testForgotPasswordMatchesStoredEmailRegardlessOfCase(): void
     {
-        $oldPassword = 'password123';
-        $newPassword = 'newpassword456';
+        $oldPassword = 'Blue-Otter-Canoe-77';
+        $newPassword = 'Brand-New-Kayak-58';
         $this->registerAndVerify('Alice.Reset@Example.com', $oldPassword);
 
         $this->jsonRequest('POST', '/api/forgot-password', ['email' => 'alice.reset@example.com']);
@@ -387,11 +387,29 @@ final class AuthPasswordResetTest extends WebTestCase
         $this->login('ALICE.RESET@example.com', $newPassword);
     }
 
+    public function testWeakResetPasswordIsRejected(): void
+    {
+        $email = 'weak-reset@example.com';
+        $this->registerAndVerify($email, 'Blue-Otter-Canoe-77');
+
+        $this->jsonRequest('POST', '/api/forgot-password', ['email' => $email]);
+        $token = $this->extractTokenFromLastEmail();
+
+        $this->jsonRequest('POST', '/api/reset-password', [
+            'token' => $token,
+            'password' => 'qwerty12345',
+        ]);
+        self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
+        $violations = $this->jsonResponse()['violations'] ?? null;
+        self::assertIsArray($violations);
+        self::assertContains('password', array_column($violations, 'propertyPath'));
+    }
+
     public function testShortResetPasswordDoesNotConsumeTheToken(): void
     {
         $email = 'short-reset@example.com';
-        $oldPassword = 'password123';
-        $newPassword = 'newpassword456';
+        $oldPassword = 'Blue-Otter-Canoe-77';
+        $newPassword = 'Brand-New-Kayak-58';
         $this->registerAndVerify($email, $oldPassword);
 
         $this->jsonRequest('POST', '/api/forgot-password', ['email' => $email]);
@@ -424,7 +442,7 @@ final class AuthPasswordResetTest extends WebTestCase
     public function testPasswordResetDoesNotVerifyUnverifiedAccount(): void
     {
         $email = 'unverified-reset@example.com';
-        $newPassword = 'newpassword456';
+        $newPassword = 'Brand-New-Kayak-58';
 
         $this->jsonRequest('POST', '/api/register', [
             'email' => $email,
@@ -469,8 +487,8 @@ final class AuthPasswordResetTest extends WebTestCase
     public function testVerifyAfterResetUsesPasswordChosenAtVerification(): void
     {
         $email = 'verify-after-reset@example.com';
-        $resetPassword = 'resetpassword1';
-        $verificationPassword = 'chosen-by-inbox';
+        $resetPassword = 'Hidden-Lantern-Orbit-3';
+        $verificationPassword = 'Inbox-Chosen-Walrus-27';
 
         $this->jsonRequest('POST', '/api/register', [
             'email' => $email,
@@ -512,19 +530,19 @@ final class AuthPasswordResetTest extends WebTestCase
     public function testPasswordResetRevokesEveryRefreshSessionButNotOtherAccounts(): void
     {
         $email = 'reset-sessions@example.com';
-        $this->registerAndVerify($email, 'password123');
-        $first = $this->login($email, 'password123');
-        $second = $this->login($email, 'password123');
+        $this->registerAndVerify($email, 'Blue-Otter-Canoe-77');
+        $first = $this->login($email, 'Blue-Otter-Canoe-77');
+        $second = $this->login($email, 'Blue-Otter-Canoe-77');
 
-        $this->registerAndVerify('bystander@example.com', 'password123');
-        $bystander = $this->login('bystander@example.com', 'password123');
+        $this->registerAndVerify('bystander@example.com', 'Blue-Otter-Canoe-77');
+        $bystander = $this->login('bystander@example.com', 'Blue-Otter-Canoe-77');
 
         $this->jsonRequest('POST', '/api/forgot-password', ['email' => $email]);
         self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
 
         $this->jsonRequest('POST', '/api/reset-password', [
             'token' => $this->extractTokenFromLastEmail(),
-            'password' => 'newpassword456',
+            'password' => 'Brand-New-Kayak-58',
         ]);
         self::assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
 
@@ -561,7 +579,7 @@ final class AuthPasswordResetTest extends WebTestCase
         // Revocation marks compare iat at second resolution and also refuse a token
         // issued in the same second, so wait out that second before logging in again.
         $this->waitForNextSecond();
-        $fresh = $this->login($email, 'newpassword456');
+        $fresh = $this->login($email, 'Brand-New-Kayak-58');
         $this->client->request('GET', '/api/me', server: [
             'HTTP_AUTHORIZATION' => 'Bearer '.$fresh['token'],
         ]);
@@ -571,8 +589,8 @@ final class AuthPasswordResetTest extends WebTestCase
     public function testPasswordResetTokenWithoutExpiryKeepsTheOldPassword(): void
     {
         $email = 'null-expiry-reset@example.com';
-        $oldPassword = 'password123';
-        $newPassword = 'newpassword456';
+        $oldPassword = 'Blue-Otter-Canoe-77';
+        $newPassword = 'Brand-New-Kayak-58';
         $this->registerAndVerify($email, $oldPassword);
 
         $this->jsonRequest('POST', '/api/forgot-password', ['email' => $email]);

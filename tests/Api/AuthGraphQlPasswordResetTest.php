@@ -16,7 +16,7 @@ final class AuthGraphQlPasswordResetTest extends WebTestCase
     public function testForgotPasswordEmailUsesCzechLocale(): void
     {
         $emailAddress = 'graphql-reset-locale-cs@example.com';
-        $this->registerVerifyAndLogin($emailAddress, 'password123');
+        $this->registerVerifyAndLogin($emailAddress, 'Blue-Otter-Canoe-77');
 
         $forgot = $this->graphql(<<<'GRAPHQL'
             mutation($email: String!, $locale: String) {
@@ -51,7 +51,7 @@ final class AuthGraphQlPasswordResetTest extends WebTestCase
     public function testForgotPasswordInvalidLocaleDoesNotReplaceTheResetToken(): void
     {
         $email = 'graphql-reset-locale-bad@example.com';
-        $this->registerVerifyAndLogin($email, 'password123');
+        $this->registerVerifyAndLogin($email, 'Blue-Otter-Canoe-77');
 
         $forgot = $this->graphql(<<<'GRAPHQL'
             mutation($email: String!) {
@@ -94,13 +94,13 @@ final class AuthGraphQlPasswordResetTest extends WebTestCase
             }
             GRAPHQL, variables: [
             'token' => $token,
-            'password' => 'newpassword456',
+            'password' => 'Brand-New-Kayak-58',
         ]);
 
         self::assertResponseIsSuccessful();
         self::assertArrayNotHasKey('errors', $reset);
 
-        $login = $this->loginMutation($email, 'newpassword456');
+        $login = $this->loginMutation($email, 'Brand-New-Kayak-58');
         self::assertResponseIsSuccessful();
         self::assertArrayNotHasKey('errors', $login);
     }
@@ -108,8 +108,8 @@ final class AuthGraphQlPasswordResetTest extends WebTestCase
     public function testForgotAndResetPassword(): void
     {
         $email = 'graphql-reset@example.com';
-        $oldPassword = 'password123';
-        $newPassword = 'newpassword456';
+        $oldPassword = 'Blue-Otter-Canoe-77';
+        $newPassword = 'Brand-New-Kayak-58';
         $this->registerVerifyAndLogin($email, $oldPassword);
 
         $forgot = $this->graphql(<<<'GRAPHQL'
@@ -168,8 +168,8 @@ final class AuthGraphQlPasswordResetTest extends WebTestCase
     public function testShortResetPasswordDoesNotConsumeTheToken(): void
     {
         $email = 'graphql-short-reset@example.com';
-        $oldPassword = 'password123';
-        $newPassword = 'newpassword456';
+        $oldPassword = 'Blue-Otter-Canoe-77';
+        $newPassword = 'Brand-New-Kayak-58';
         $this->registerVerifyAndLogin($email, $oldPassword);
 
         $forgot = $this->graphql(<<<'GRAPHQL'
@@ -224,8 +224,8 @@ final class AuthGraphQlPasswordResetTest extends WebTestCase
     public function testResetOnUnverifiedAccountStoresPasswordButBlocksLogin(): void
     {
         $email = 'graphql-unverified-reset@example.com';
-        $resetPassword = 'resetpassword1';
-        $verificationPassword = 'chosen-by-inbox';
+        $resetPassword = 'Hidden-Lantern-Orbit-3';
+        $verificationPassword = 'Inbox-Chosen-Walrus-27';
 
         $register = $this->graphql(<<<'GRAPHQL'
             mutation($email: String!) {

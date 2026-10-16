@@ -83,7 +83,7 @@ final class AuthLoginTimingTest extends WebTestCase
     private function createUser(string $email, bool $verified): void
     {
         $user = (new User())->setEmail($email)->setIsVerified($verified);
-        $user->setPassword(static::getContainer()->get(UserPasswordHasherInterface::class)->hashPassword($user, 'password123'));
+        $user->setPassword(static::getContainer()->get(UserPasswordHasherInterface::class)->hashPassword($user, 'Blue-Otter-Canoe-77'));
         static::getContainer()->get(UserRepository::class)->save($user);
     }
 }

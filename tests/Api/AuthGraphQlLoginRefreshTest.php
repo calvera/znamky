@@ -17,7 +17,7 @@ final class AuthGraphQlLoginRefreshTest extends WebTestCase
 
     public function testRefreshRotatesToken(): void
     {
-        $tokens = $this->registerVerifyAndLogin('graphql-refresh@example.com', 'password123');
+        $tokens = $this->registerVerifyAndLogin('graphql-refresh@example.com', 'Blue-Otter-Canoe-77');
 
         $refresh = $this->graphql(<<<'GRAPHQL'
             mutation($refreshToken: String!) {
@@ -52,7 +52,7 @@ final class AuthGraphQlLoginRefreshTest extends WebTestCase
 
     public function testRefreshReuseRevokesTheTokenFamily(): void
     {
-        $tokens = $this->registerVerifyAndLogin('graphql-refresh-reuse@example.com', 'password123');
+        $tokens = $this->registerVerifyAndLogin('graphql-refresh-reuse@example.com', 'Blue-Otter-Canoe-77');
 
         $refresh = $this->graphql(<<<'GRAPHQL'
             mutation($refreshToken: String!) {
@@ -98,7 +98,7 @@ final class AuthGraphQlLoginRefreshTest extends WebTestCase
 
     public function testRefreshReuseUsesOnlyTheMutationToken(): void
     {
-        $tokens = $this->registerVerifyAndLogin('graphql-refresh-mutation-only@example.com', 'password123');
+        $tokens = $this->registerVerifyAndLogin('graphql-refresh-mutation-only@example.com', 'Blue-Otter-Canoe-77');
 
         $this->client->request(
             'POST',
@@ -158,7 +158,7 @@ final class AuthGraphQlLoginRefreshTest extends WebTestCase
     public function testLoginRejectsUnverifiedAccountAndAcceptsRegisteredEmailCasing(): void
     {
         $email = 'Alice.GraphQl@Example.com';
-        $password = 'password123';
+        $password = 'Blue-Otter-Canoe-77';
 
         $register = $this->graphql(<<<'GRAPHQL'
             mutation($email: String!) {
@@ -221,7 +221,7 @@ final class AuthGraphQlLoginRefreshTest extends WebTestCase
     public function testRefreshRejectsUnverifiedAccountWithoutConsumingTheToken(): void
     {
         $email = 'graphql-unverified-refresh@example.com';
-        $password = 'password123';
+        $password = 'Blue-Otter-Canoe-77';
         $tokens = $this->registerVerifyAndLogin($email, $password);
 
         $user = $this->users()->findOneByEmail($email);
@@ -247,7 +247,7 @@ final class AuthGraphQlLoginRefreshTest extends WebTestCase
     public function testRefreshDoesNotIssueAUsableTokenPastTheFamilyDeadline(): void
     {
         $email = 'graphql-family-deadline@example.com';
-        $tokens = $this->registerVerifyAndLogin($email, 'password123');
+        $tokens = $this->registerVerifyAndLogin($email, 'Blue-Otter-Canoe-77');
 
         $stored = $this->refreshTokenEntity($email);
         $family = $stored->getFamily();
@@ -275,7 +275,7 @@ final class AuthGraphQlLoginRefreshTest extends WebTestCase
     public function testRefreshKeepsTheTtlWhenTheFamilyDeadlineIsLater(): void
     {
         $email = 'graphql-family-ttl@example.com';
-        $tokens = $this->registerVerifyAndLogin($email, 'password123');
+        $tokens = $this->registerVerifyAndLogin($email, 'Blue-Otter-Canoe-77');
 
         $stored = $this->refreshTokenEntity($email);
         $originalValid = $stored->getValid();
@@ -305,7 +305,7 @@ final class AuthGraphQlLoginRefreshTest extends WebTestCase
     public function testRefreshRejectsATokenWhoseUserWasDeleted(): void
     {
         $email = 'graphql-deleted-refresh@example.com';
-        $tokens = $this->registerVerifyAndLogin($email, 'password123');
+        $tokens = $this->registerVerifyAndLogin($email, 'Blue-Otter-Canoe-77');
 
         $user = $this->users()->findOneByEmail($email);
         self::assertInstanceOf(User::class, $user);

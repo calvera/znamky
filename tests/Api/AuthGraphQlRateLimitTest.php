@@ -14,7 +14,7 @@ final class AuthGraphQlRateLimitTest extends WebTestCase
     public function testFailedGraphQlLoginsAreThrottledAndSuccessResetsTheUsernameLimit(): void
     {
         $email = 'graphql-throttle@example.com';
-        $password = 'password123';
+        $password = 'Blue-Otter-Canoe-77';
         $this->registerVerifyAndLogin($email, $password);
 
         for ($attempt = 1; $attempt <= 5; ++$attempt) {
@@ -48,7 +48,7 @@ final class AuthGraphQlRateLimitTest extends WebTestCase
     public function testLoginsBlockedByAccountStatusAreThrottled(): void
     {
         $email = 'graphql-unverified-throttle@example.com';
-        $password = 'resetpassword1';
+        $password = 'Hidden-Lantern-Orbit-3';
 
         $this->graphql(<<<'GRAPHQL'
             mutation($email: String!) {
@@ -94,7 +94,7 @@ final class AuthGraphQlRateLimitTest extends WebTestCase
 
     public function testSuccessfulGraphQlLoginsDoNotExhaustTheIpLimit(): void
     {
-        $password = 'password123';
+        $password = 'Blue-Otter-Canoe-77';
         $this->registerVerifyAndLogin('graphql-ip-budget@example.com', $password);
 
         // Test env allows 20 login attempts per IP. Successes must not spend that
@@ -174,14 +174,14 @@ final class AuthGraphQlRateLimitTest extends WebTestCase
                 }
                 GRAPHQL, variables: [
                 'token' => sprintf('not-a-real-token-%d', $i),
-                'password' => 'password123',
+                'password' => 'Blue-Otter-Canoe-77',
             ]);
             $this->assertGraphQlError($verify, Response::HTTP_UNPROCESSABLE_ENTITY, 'Invalid verification token.');
         }
 
         $blockedVerify = $this->graphql(<<<'GRAPHQL'
             mutation {
-              verifyEmailUser(input: { token: "not-a-real-token-overflow", password: "password123" }) {
+              verifyEmailUser(input: { token: "not-a-real-token-overflow", password: "Blue-Otter-Canoe-77" }) {
                 user {
                   success
                 }

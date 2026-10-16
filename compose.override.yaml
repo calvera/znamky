@@ -6,6 +6,10 @@ services:
       - "5432:5432"
 ###< doctrine/doctrine-bundle ###
 
+  redis:
+    ports:
+      - "6379:6379"
+
 ###> symfony/mailer ###
   mailer:
     image: axllent/mailpit

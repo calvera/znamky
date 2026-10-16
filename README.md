@@ -14,6 +14,7 @@ verification, and password reset.
 - PHP 8.4+
 - Composer
 - PostgreSQL 18 (Docker Compose included)
+- Redis in production (Docker Compose included; dev and test use the filesystem cache)
 - Symfony CLI (optional)
 
 ## Quick start
@@ -115,13 +116,14 @@ Multi-stage FrankenPHP image (`Dockerfile`). Build locally:
 docker build --target prod -t znamky .
 ```
 
-Run with production secrets and a reachable Postgres (JWT PEMs via volume or
-env paths):
+Run with production secrets, a reachable Postgres and Redis (JWT PEMs via volume
+or env paths):
 
 ```bash
 docker run --rm -p 8080:80 \
   -e APP_SECRET=... \
   -e DATABASE_URL='postgresql://...' \
+  -e REDIS_URL='redis://redis:6379' \
   -e MAILER_DSN=... \
   -e MAILER_FROM=noreply@example.com \
   -e CORS_ALLOW_ORIGIN='^https://example\.com$' \
@@ -133,6 +135,10 @@ docker run --rm -p 8080:80 \
 
 On start the entrypoint waits for the database and runs migrations when
 `DATABASE_URL` is set.
+
+In prod, `cache.app` is Redis (`REDIS_URL`). Rate limits, the JWT blocklist and
+refresh-token reuse detection live there, so every instance must point at the same
+Redis; per-instance caches would let each replica keep its own limits.
 
 Pushing a `v*` git tag builds and publishes to GHCR
 (`ghcr.io/<owner>/<repo>`) via `.github/workflows/docker.yml` (semver tags +
