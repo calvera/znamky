@@ -1,2 +1,7 @@
 framework:
     lock: '%env(LOCK_DSN)%'
+
+# The catalog commands' lock must hold across instances, like the cache.
+when@prod:
+    framework:
+        lock: '%env(REDIS_URL)%'

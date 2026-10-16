@@ -53,9 +53,10 @@ Upserts by natural keys. Re-import **preserves** existing lat/lng unless
 included) and resets identities — intentional; an ORM delete of the full catalog
 is slower and more fragile under foreign keys.
 
-Import and geocode share a Symfony Lock resource (`stamps-catalog`, via
-`LOCK_DSN`, default `flock`). A second concurrent run exits with an error
-instead of racing a purge/import.
+Import and geocode share a Symfony Lock resource (`stamps-catalog`). In prod
+the store is Redis (`REDIS_URL`), so the lock holds across instances; dev and
+test use `LOCK_DSN` (default `flock`, one machine only). A second concurrent run
+exits with an error instead of racing a purge/import.
 
 Service: `App\Service\Stamp\StampImportService` (uses
 `App\Service\Stamp\PlaceLineParser` and injected `SluggerInterface` for tag

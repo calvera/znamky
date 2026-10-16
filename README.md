@@ -136,9 +136,11 @@ docker run --rm -p 8080:80 \
 On start the entrypoint waits for the database and runs migrations when
 `DATABASE_URL` is set.
 
-In prod, `cache.app` is Redis (`REDIS_URL`). Rate limits, the JWT blocklist and
-refresh-token reuse detection live there, so every instance must point at the same
-Redis; per-instance caches would let each replica keep its own limits.
+In prod, `cache.app` and the lock store are Redis (`REDIS_URL`). Rate limits, the
+JWT blocklist and refresh-token reuse detection live in the cache, and the
+`stamps-catalog` lock keeps `app:stamps:import` and `app:stamps:geocode` from
+running at the same time on different instances. Every instance must point at the
+same Redis; dev and test use the filesystem cache and `LOCK_DSN` (`flock`).
 
 Pushing a `v*` git tag builds and publishes to GHCR
 (`ghcr.io/<owner>/<repo>`) via `.github/workflows/docker.yml` (semver tags +
