@@ -109,6 +109,19 @@ final class AuthGraphQlRateLimitTest extends WebTestCase
         self::assertNotSame('', $other['token']);
     }
 
+    public function testRefreshTokenMutationIsRateLimited(): void
+    {
+        for ($i = 1; $i <= 10; ++$i) {
+            $refused = $this->refreshMutation('unknown-'.$i);
+            self::assertArrayHasKey('errors', $refused);
+            $this->assertGraphQlError($refused, Response::HTTP_UNAUTHORIZED, 'Invalid refresh token.');
+        }
+
+        $blocked = $this->refreshMutation('unknown-overflow');
+        self::assertArrayHasKey('errors', $blocked);
+        $this->assertGraphQlError($blocked, Response::HTTP_TOO_MANY_REQUESTS, 'Too Many Requests');
+    }
+
     public function testEmailAndTokenRateLimitsAreIndependent(): void
     {
         for ($i = 1; $i <= 4; ++$i) {

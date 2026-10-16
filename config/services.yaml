@@ -38,9 +38,15 @@ services:
         parent: lexik_jwt_authentication.security.jwt_authenticator
         abstract: true
 
-    # Gesdinet v3.0.0 wires reuse_detection.cache and block_jwts_on_revocation.cache
-    # via service((string) param(...)), which resolves to a literal "%…%" service id.
-    # Replace both with a real pool.
+    # Gesdinet v3.0.0 wires reuse_detection.cache, block_jwts_on_revocation.cache and
+    # rate_limiter.limiter via service((string) param(...)), which resolves to a literal
+    # "%…%" service id. Replace them with real services.
+    gesdinet_jwt_refresh_token.refresh_rate_limiter:
+        class: Gesdinet\JWTRefreshTokenBundle\Security\RateLimiting\RefreshRateLimiter
+        arguments:
+            $limiterFactory: '@limiter.auth_refresh'
+            $key: '%gesdinet_jwt_refresh_token.rate_limiter.key%'
+
     gesdinet_jwt_refresh_token.jwt_revocation_registry:
         class: Gesdinet\JWTRefreshTokenBundle\Security\Revocation\CacheJWTRevocationRegistry
         arguments:

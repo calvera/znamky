@@ -108,6 +108,10 @@ Content-Type: application/json
 
 **200** `{ "token": "<jwt>", "refresh_token": "<refresh>" }`.
 
+A failed login costs one password hash whether the email is unknown, the account
+is unverified or the password is wrong, so response time does not reveal which
+emails have accounts (`LoginTimingEqualizer`).
+
 Use the JWT on protected routes:
 
 ```http
@@ -225,6 +229,7 @@ Password minimum length is **8** characters.
 | `POST /api/register`, `POST /api/forgot-password` | `auth_email` | 10 / 15 minutes per IP |
 | `POST /api/forgot-password`, GraphQL `forgotPasswordUser` | `auth_reset_email` | 3 / hour per email address; over the limit still **204**, no email |
 | `POST /api/verify-email`, `POST /api/reset-password` | `auth_token` | 20 / 15 minutes per IP |
+| `POST /api/token/refresh`, GraphQL `refreshTokenUser` | `auth_refresh` | 60 / 15 minutes per IP (shared by REST and GraphQL) |
 | `POST /api/login`, GraphQL `loginUser` | login throttling (`username+IP` + `IP`) | 5 / 5 minutes per username+IP; 50 / 15 minutes per IP. Only failed attempts consume the IP budget. |
 
 Config: `config/packages/rate_limiter.yaml`.

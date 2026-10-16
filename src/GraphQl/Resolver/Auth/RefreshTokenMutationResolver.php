@@ -8,6 +8,7 @@ use ApiPlatform\GraphQl\Resolver\MutationResolverInterface;
 use App\ApiResource\Auth;
 use App\Dto\Auth\RefreshTokenRequest;
 use App\GraphQl\Auth\AuthInputValidator;
+use App\GraphQl\Auth\AuthRateLimiter;
 use App\Service\Auth\RefreshTokenRotator;
 
 final class RefreshTokenMutationResolver implements MutationResolverInterface
@@ -15,11 +16,14 @@ final class RefreshTokenMutationResolver implements MutationResolverInterface
     public function __construct(
         private readonly RefreshTokenRotator $refreshTokenRotator,
         private readonly AuthInputValidator $inputValidator,
+        private readonly AuthRateLimiter $rateLimiter,
     ) {
     }
 
     public function __invoke(?object $item, array $context): object
     {
+        $this->rateLimiter->consumeRefresh();
+
         $request = $this->inputValidator->dto($context, RefreshTokenRequest::class);
 
         $tokens = $this->refreshTokenRotator->rotate($request->refreshToken);

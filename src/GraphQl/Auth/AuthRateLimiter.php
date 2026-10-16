@@ -19,6 +19,8 @@ final class AuthRateLimiter
         private readonly RateLimiterFactoryInterface $authEmailLimiter,
         #[Autowire(service: 'limiter.auth_token')]
         private readonly RateLimiterFactoryInterface $authTokenLimiter,
+        #[Autowire(service: 'limiter.auth_refresh')]
+        private readonly RateLimiterFactoryInterface $authRefreshLimiter,
         private readonly ClockInterface $clock,
     ) {
     }
@@ -31,6 +33,11 @@ final class AuthRateLimiter
     public function consumeToken(): void
     {
         $this->consume($this->authTokenLimiter);
+    }
+
+    public function consumeRefresh(): void
+    {
+        $this->consume($this->authRefreshLimiter);
     }
 
     private function consume(RateLimiterFactoryInterface $factory): void

@@ -6,6 +6,7 @@ namespace App\Service\Auth;
 
 use App\Entity\User;
 use App\Repository\UserRepository;
+use App\Security\LoginTimingEqualizer;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpKernel\Exception\UnauthorizedHttpException;
@@ -26,6 +27,7 @@ final class LoginService
         private readonly RequestStack $requestStack,
         #[Autowire(service: 'app.login_rate_limiter')]
         private readonly DefaultLoginRateLimiter $loginRateLimiter,
+        private readonly LoginTimingEqualizer $timingEqualizer,
     ) {
     }
 
@@ -64,7 +66,14 @@ final class LoginService
     private function authenticate(string $email, string $password): User
     {
         $user = $this->userRepository->findOneByEmail($email);
-        if (null === $user || !$this->passwordHasher->isPasswordValid($user, $password)) {
+        if (null === $user) {
+            // Same cost as a wrong password, so timing doesn't reveal unknown emails.
+            $this->timingEqualizer->spendPasswordCheck($password);
+
+            throw new UnauthorizedHttpException('Bearer', 'Invalid credentials.');
+        }
+
+        if (!$this->passwordHasher->isPasswordValid($user, $password)) {
             throw new UnauthorizedHttpException('Bearer', 'Invalid credentials.');
         }
 

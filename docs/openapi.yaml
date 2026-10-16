@@ -450,6 +450,9 @@
                     },
                     "401": {
                         "description": "The refresh token is missing, unknown or has expired"
+                    },
+                    "429": {
+                        "description": "Rate limit exceeded (Retry-After header set)"
                     }
                 },
                 "summary": "Exchanges a refresh token for a new JWT.",
@@ -1335,18 +1338,6 @@
                                     "null"
                                 ]
                             },
-                            "latitude": {
-                                "type": [
-                                    "string",
-                                    "null"
-                                ]
-                            },
-                            "longitude": {
-                                "type": [
-                                    "string",
-                                    "null"
-                                ]
-                            },
                             "tags": {
                                 "type": "array",
                                 "items": {
@@ -1358,6 +1349,18 @@
                                 "items": {
                                     "$ref": "#/components/schemas/StampPlace.jsonld-stamp.read"
                                 }
+                            },
+                            "latitude": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ]
+                            },
+                            "longitude": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ]
                             }
                         },
                         "required": [

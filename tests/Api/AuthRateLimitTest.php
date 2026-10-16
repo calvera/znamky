@@ -53,6 +53,17 @@ final class AuthRateLimitTest extends WebTestCase
         self::assertResponseStatusCodeSame(Response::HTTP_TOO_MANY_REQUESTS);
     }
 
+    public function testTokenRefreshReturns429AfterLimit(): void
+    {
+        for ($i = 1; $i <= 10; ++$i) {
+            $this->jsonRequest('POST', '/api/token/refresh', ['refresh_token' => 'unknown-'.$i]);
+            self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED, sprintf('request %d should reach the token check', $i));
+        }
+
+        $this->jsonRequest('POST', '/api/token/refresh', ['refresh_token' => 'unknown-overflow']);
+        self::assertResponseStatusCodeSame(Response::HTTP_TOO_MANY_REQUESTS);
+    }
+
     public function testLoginThrottlingBlocksAfterFailedAttempts(): void
     {
         for ($i = 1; $i <= 5; ++$i) {

@@ -8,6 +8,10 @@ gesdinet_jwt_refresh_token:
         enabled: true
         # Hashing is on from day one; never accept a cleartext (or digest) row as a credential.
         accept_stored_in_the_clear: false
+    rate_limiter:
+        enabled: true
+        limiter: limiter.auth_refresh
+        key: ip
     reuse_detection:
         enabled: true
         # cache.app must be shared across replicas for replay detection to work in a fleet.

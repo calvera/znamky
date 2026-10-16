@@ -18,6 +18,12 @@ framework:
             limit: 20
             interval: '15 minutes'
 
+        # Refresh (REST via Gesdinet's rate_limiter, GraphQL via AuthRateLimiter), per IP.
+        auth_refresh:
+            policy: sliding_window
+            limit: 60
+            interval: '15 minutes'
+
         # Login throttling: per username+IP (local) and per IP (global).
         username_ip_login:
             policy: token_bucket
@@ -47,6 +53,11 @@ when@test:
             auth_token:
                 policy: fixed_window
                 limit: 5
+                interval: '1 hour'
+
+            auth_refresh:
+                policy: fixed_window
+                limit: 10
                 interval: '1 hour'
 
             username_ip_login:

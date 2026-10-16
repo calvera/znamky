@@ -14,8 +14,10 @@ use ApiPlatform\OpenApi\Model\Tag;
 use ApiPlatform\OpenApi\OpenApi;
 use Symfony\Component\DependencyInjection\Attribute\AsDecorator;
 use Symfony\Component\HttpFoundation\Response as HttpResponse;
+use Webmozart\Assert\Assert;
 
-#[AsDecorator(decorates: 'api_platform.openapi.factory', priority: 10)]
+// Below Lexik (0) and Gesdinet (-25), so their login and refresh paths exist to amend.
+#[AsDecorator(decorates: 'api_platform.openapi.factory', priority: -50)]
 final class AuthOpenApiFactory implements OpenApiFactoryInterface
 {
     public function __construct(
@@ -34,6 +36,9 @@ final class AuthOpenApiFactory implements OpenApiFactoryInterface
         $paths->addPath('/api/reset-password', new PathItem(post: $this->resetPasswordOperation()));
         $paths->addPath('/api/logout', new PathItem(post: $this->logoutOperation()));
         $paths->addPath('/api/me', new PathItem(get: $this->meOperation()));
+        $paths->addPath('/api/token/refresh', $this->withRefreshRateLimit(
+            Assert::notNull($paths->getPath('/api/token/refresh'), 'Gesdinet documents the refresh path.'),
+        ));
 
         $schemas = $openApi->getComponents()->getSchemas() ?? new \ArrayObject();
         $schemas['ValidationFailed'] = new \ArrayObject([
@@ -298,6 +303,18 @@ final class AuthOpenApiFactory implements OpenApiFactoryInterface
                 ])),
             ]),
         );
+    }
+
+    /**
+     * Gesdinet documents POST /api/token/refresh but not the auth_refresh limiter's 429.
+     */
+    private function withRefreshRateLimit(PathItem $refreshPath): PathItem
+    {
+        $refresh = Assert::notNull($refreshPath->getPost(), 'Gesdinet documents POST /api/token/refresh.');
+        $responses = $refresh->getResponses() ?? [];
+        $responses[(string) HttpResponse::HTTP_TOO_MANY_REQUESTS] = $this->tooManyRequestsResponse();
+
+        return $refreshPath->withPost($refresh->withResponses($responses));
     }
 
     private function tooManyRequestsResponse(): Response
