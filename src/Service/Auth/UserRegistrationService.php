@@ -28,7 +28,7 @@ final class UserRegistrationService
     {
         $existing = $this->userRepository->findOneByEmail($request->email);
         if (null !== $existing && !$existing->isVerified()) {
-            return $this->reissueVerification($existing, $request->locale);
+            return $this->issueVerification($existing, $request->locale);
         }
 
         $user = new User();
@@ -39,28 +39,23 @@ final class UserRegistrationService
             throw new ValidationFailedException($user, $violations);
         }
 
-        $rawToken = $this->tokenHasher->generate();
-        $user->setEmailVerificationToken($this->tokenHasher->hash($rawToken));
-        $user->setEmailVerificationTokenExpiresAt($this->clock->now()->modify('+1 day'));
         $user->setIsVerified(false);
 
-        // The raw token exists only in the email. Commit the account only after
-        // that send succeeds, or a transient SMTP failure leaves an address that
-        // can never be verified and can never be registered again.
-        $this->entityManager->wrapInTransaction(function () use ($user, $rawToken, $request): void {
-            $this->userRepository->save($user);
-            $this->authMailer->sendEmailVerification($user, $rawToken, $request->locale);
-        });
-
-        return $user;
+        return $this->issueVerification($user, $request->locale);
     }
 
-    private function reissueVerification(User $user, string $locale): User
+    /**
+     * Sets a fresh verification token and saves the user only if the email is sent.
+     */
+    private function issueVerification(User $user, string $locale): User
     {
         $rawToken = $this->tokenHasher->generate();
         $user->setEmailVerificationToken($this->tokenHasher->hash($rawToken));
         $user->setEmailVerificationTokenExpiresAt($this->clock->now()->modify('+1 day'));
 
+        // The raw token exists only in the email. Commit the account only after
+        // that send succeeds, or a transient SMTP failure leaves an address that
+        // can never be verified and can never be registered again.
         $this->entityManager->wrapInTransaction(function () use ($user, $rawToken, $locale): void {
             $this->userRepository->save($user);
             $this->authMailer->sendEmailVerification($user, $rawToken, $locale);
