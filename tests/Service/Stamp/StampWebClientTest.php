@@ -126,9 +126,10 @@ final class StampWebClientTest extends TestCase
 
         (new StampWebClient(new MockHttpClient(), $clock))->pause(1000);
 
-        $waited = (float) $clock->now()->format('U.u') - (float) $start->format('U.u');
-        self::assertGreaterThanOrEqual(0.8, $waited);
-        self::assertLessThanOrEqual(1.2, $waited);
+        // Integer microseconds: floats at epoch magnitude can't hold the exact 0.8 s bound.
+        $waitedUs = (int) $clock->now()->format('Uu') - (int) $start->format('Uu');
+        self::assertGreaterThanOrEqual(800_000, $waitedUs);
+        self::assertLessThanOrEqual(1_200_000, $waitedUs);
     }
 
     public function testPauseIgnoresNonPositiveDelay(): void
