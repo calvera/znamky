@@ -47,20 +47,17 @@ final class GeocodeStampsCommand
         }
 
         try {
-            $onProgress = function (string $kind, ?int $id, bool $ok) use ($delayMs, $io): void {
+            $onProgress = function (string $kind, ?int $id, bool $ok) use ($io): void {
                 if ($ok) {
                     $io->writeln(sprintf('  <info>✓</info> %s #%d', $kind, $id ?? 0), OutputInterface::VERBOSITY_VERBOSE);
                 } else {
                     $io->writeln(sprintf('  <comment>×</comment> %s #%d (no result)', $kind, $id ?? 0), OutputInterface::VERBOSITY_VERBOSE);
                 }
-                if ($delayMs > 0) {
-                    usleep($delayMs * 1000);
-                }
             };
 
             if (\in_array($only, ['stamps', 'all'], true)) {
                 $io->section('Geocoding stamps');
-                $stats = $this->stampGeocodeService->geocodeStamps($force, $onProgress);
+                $stats = $this->stampGeocodeService->geocodeStamps($force, $onProgress, $delayMs);
                 $io->writeln(sprintf(
                     'Stamps: %d geocoded, %d skipped, %d failed',
                     $stats['geocoded'],
@@ -71,7 +68,7 @@ final class GeocodeStampsCommand
 
             if (\in_array($only, ['places', 'all'], true)) {
                 $io->section('Geocoding places');
-                $stats = $this->stampGeocodeService->geocodePlaces($force, $onProgress);
+                $stats = $this->stampGeocodeService->geocodePlaces($force, $onProgress, $delayMs);
                 $io->writeln(sprintf(
                     'Places: %d geocoded, %d skipped, %d failed',
                     $stats['geocoded'],

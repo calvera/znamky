@@ -10,6 +10,7 @@ use App\Entity\StampPlace;
 use App\Repository\StampPlaceRepository;
 use App\Repository\StampRepository;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\Clock\ClockInterface;
 
 final class StampGeocodeService
 {
@@ -20,6 +21,7 @@ final class StampGeocodeService
         private readonly StampRepository $stampRepository,
         private readonly StampPlaceRepository $stampPlaceRepository,
         private readonly GeocoderInterface $geocoder,
+        private readonly ClockInterface $clock,
     ) {
     }
 
@@ -28,13 +30,14 @@ final class StampGeocodeService
      *
      * @return array{geocoded: int, skipped: int, failed: int}
      */
-    public function geocodeStamps(bool $force = false, ?callable $onProgress = null): array
+    public function geocodeStamps(bool $force = false, ?callable $onProgress = null, int $delayMs = 0): array
     {
         return $this->geocodeAll(
             $this->stampRepository->iterateNeedingGeocode($force),
             'stamp',
             $this->buildStampQuery(...),
             $onProgress,
+            $delayMs,
         );
     }
 
@@ -43,13 +46,14 @@ final class StampGeocodeService
      *
      * @return array{geocoded: int, skipped: int, failed: int}
      */
-    public function geocodePlaces(bool $force = false, ?callable $onProgress = null): array
+    public function geocodePlaces(bool $force = false, ?callable $onProgress = null, int $delayMs = 0): array
     {
         return $this->geocodeAll(
             $this->stampPlaceRepository->iterateNeedingGeocode($force),
             'place',
             static fn (StampPlace $place): string => trim($place->getName()),
             $onProgress,
+            $delayMs,
         );
     }
 
@@ -65,7 +69,8 @@ final class StampGeocodeService
     }
 
     /**
-     * Geocodes each row, flushing and clearing the entity manager every BATCH_SIZE successes.
+     * Geocodes each row, waiting $delayMs after every API call and flushing and clearing
+     * the entity manager every BATCH_SIZE successes.
      *
      * @template T of Geocodable
      *
@@ -75,7 +80,7 @@ final class StampGeocodeService
      *
      * @return array{geocoded: int, skipped: int, failed: int}
      */
-    private function geocodeAll(iterable $rows, string $kind, \Closure $queryOf, ?callable $onProgress): array
+    private function geocodeAll(iterable $rows, string $kind, \Closure $queryOf, ?callable $onProgress, int $delayMs): array
     {
         $stats = ['geocoded' => 0, 'skipped' => 0, 'failed' => 0];
 
@@ -87,6 +92,9 @@ final class StampGeocodeService
             }
 
             $coords = $this->geocoder->geocode($query);
+            if ($delayMs > 0) {
+                $this->clock->sleep($delayMs / 1000);
+            }
             if (null === $coords) {
                 ++$stats['failed'];
                 if (null !== $onProgress) {
